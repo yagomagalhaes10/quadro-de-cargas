@@ -265,6 +265,31 @@
     background: var(--panel-bg-hover);
   }
 
+  .card.called {
+    border-left: 3px solid var(--amber);
+    animation: blinkCalled 1s infinite;
+  }
+  @keyframes blinkCalled {
+    0%, 100% { background: var(--panel-bg-alt); }
+    50% { background: rgba(255, 179, 0, 0.30); }
+  }
+
+  .badge-called {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #1a1300;
+    background: var(--amber);
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    animation: blinkText 1s infinite;
+  }
+  @keyframes blinkText {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
   .badge-progress {
     font-size: 0.68rem;
     font-weight: 700;
@@ -568,7 +593,7 @@
     } catch (e) { fetchData(); }
   }
 
-  async function moveToFront(item) {
+  async function callToDock(item) {
     const secActive = items
       .filter(i => i.secao === item.secao && i.status !== 'CARREGADO')
       .sort((a, b) => a.ordem - b.ordem);
@@ -579,9 +604,12 @@
       const it = items.find(i => i.id === id);
       if (it) it.ordem = idx + 1;
     });
+    const target = items.find(i => i.id === item.id);
+    if (target) target.status = 'CHAMADO';
     render(item.id);
     try {
-      const data = await postAction({ action: 'reorder', order: newOrderIds });
+      await postAction({ action: 'reorder', order: newOrderIds });
+      const data = await postAction({ action: 'setStatus', id: item.id, status: 'CHAMADO' });
       if (data.items) { items = data.items; render(); }
     } catch (e) { fetchData(); }
   }
@@ -590,11 +618,13 @@
     const target = parseInt(rawValue, 10);
     const secAll = items.filter(i => i.secao === item.secao);
     const inProgress = secAll.filter(i => i.status === 'INICIADO').sort((a, b) => a.ordem - b.ordem);
+    const chamado = secAll.filter(i => i.status === 'CHAMADO').sort((a, b) => a.ordem - b.ordem);
     const pending = secAll.filter(i => !i.status).sort((a, b) => a.ordem - b.ordem);
 
-    const isInProgress = item.status === 'INICIADO';
-    const group = isInProgress ? inProgress : pending;
-    const offset = isInProgress ? 0 : inProgress.length;
+    let group, offset;
+    if (item.status === 'INICIADO') { group = inProgress; offset = 0; }
+    else if (item.status === 'CHAMADO') { group = chamado; offset = inProgress.length; }
+    else { group = pending; offset = inProgress.length + chamado.length; }
 
     if (isNaN(target) || group.length === 0) { render(); return; }
 
@@ -604,9 +634,14 @@
     const withoutItem = group.filter(i => i.id !== item.id);
     withoutItem.splice(idxTarget - 1, 0, item);
 
-    const newOrderIds = isInProgress
-      ? [...withoutItem.map(i => i.id), ...pending.map(i => i.id)]
-      : [...inProgress.map(i => i.id), ...withoutItem.map(i => i.id)];
+    let newOrderIds;
+    if (item.status === 'INICIADO') {
+      newOrderIds = [...withoutItem.map(i => i.id), ...chamado.map(i => i.id), ...pending.map(i => i.id)];
+    } else if (item.status === 'CHAMADO') {
+      newOrderIds = [...inProgress.map(i => i.id), ...withoutItem.map(i => i.id), ...pending.map(i => i.id)];
+    } else {
+      newOrderIds = [...inProgress.map(i => i.id), ...chamado.map(i => i.id), ...withoutItem.map(i => i.id)];
+    }
 
     newOrderIds.forEach((id, idx) => {
       const it = items.find(i => i.id === id);
@@ -636,12 +671,14 @@
     card.className = 'card'
       + (status === 'CARREGADO' ? ' loaded' : '')
       + (status === 'INICIADO' ? ' in-progress' : '')
+      + (status === 'CHAMADO' ? ' called' : '')
       + (item.id === highlightId ? ' flip' : '');
     card.innerHTML =
       (position != null ? '<input type="number" class="position-badge" value="' + position + '" min="1" />' : '') +
       '<span class="carga-chip">' + escapeHtml(item.carga || '—') + '</span>' +
       '<span class="descricao">' + escapeHtml(item.descricao) + '</span>' +
       (status === 'INICIADO' ? '<span class="badge-progress">EM ANDAMENTO</span>' : '') +
+      (status === 'CHAMADO' ? '<span class="badge-called">🔔 IR PARA DOCA</span>' : '') +
       '<span class="peso">' + formatPeso(item.peso) + '</span>' +
       '<span class="actions"></span>';
 
@@ -659,10 +696,11 @@
     } else if (status === 'INICIADO') {
       actions.appendChild(mkBtn('↺', 'Cancelar início', () => setItemStatus(item.id, '')));
       actions.appendChild(mkBtn('✓', 'Marcar concluído', () => setItemStatus(item.id, 'CARREGADO')));
+    } else if (status === 'CHAMADO') {
+      actions.appendChild(mkBtn('↺', 'Cancelar chamada', () => setItemStatus(item.id, '')));
+      actions.appendChild(mkBtn('▶', 'Iniciar carregamento', () => setItemStatus(item.id, 'INICIADO')));
     } else {
-      if (!isFirstPending) {
-        actions.appendChild(mkBtn('⤒', 'Passar na frente', () => moveToFront(item)));
-      }
+      actions.appendChild(mkBtn('🔔', 'Chamar para a doca', () => callToDock(item)));
       actions.appendChild(mkBtn('▶', 'Iniciar carregamento', () => setItemStatus(item.id, 'INICIADO')));
     }
     return card;
@@ -686,13 +724,14 @@
     SECTIONS.forEach(sec => {
       const secItems = items.filter(i => i.secao === sec.key);
       const inProgress = secItems.filter(i => i.status === 'INICIADO').sort((a, b) => a.ordem - b.ordem);
+      const chamado = secItems.filter(i => i.status === 'CHAMADO').sort((a, b) => a.ordem - b.ordem);
       const pending = secItems.filter(i => !i.status).sort((a, b) => a.ordem - b.ordem);
       const loaded = secItems.filter(i => i.status === 'CARREGADO').sort((a, b) => a.ordem - b.ordem);
 
       const totalCount = secItems.length;
       const totalKg = secItems.reduce((s, i) => s + i.peso, 0);
-      const pendingCount = pending.length + inProgress.length;
-      const pendingKg = [...inProgress, ...pending].reduce((s, i) => s + i.peso, 0);
+      const pendingCount = pending.length + chamado.length + inProgress.length;
+      const pendingKg = [...inProgress, ...chamado, ...pending].reduce((s, i) => s + i.peso, 0);
 
       const col = document.createElement('div');
       col.className = 'column';
@@ -719,10 +758,18 @@
         inProgress.forEach((item, idx) => list.appendChild(buildCard(item, false, highlightId, idx + 1)));
       }
 
-      if (pending.length === 0 && inProgress.length === 0) {
+      if (chamado.length > 0) {
+        const label = document.createElement('div');
+        label.className = 'group-label';
+        label.textContent = 'Chamado(s)';
+        list.appendChild(label);
+        chamado.forEach((item, idx) => list.appendChild(buildCard(item, false, highlightId, inProgress.length + idx + 1)));
+      }
+
+      if (pending.length === 0 && inProgress.length === 0 && chamado.length === 0) {
         list.innerHTML += '<div class="empty-state">Nenhuma carga pendente nesta seção.</div>';
       } else {
-        pending.forEach((item, idx) => list.appendChild(buildCard(item, idx === 0, highlightId, inProgress.length + idx + 1)));
+        pending.forEach((item, idx) => list.appendChild(buildCard(item, idx === 0, highlightId, inProgress.length + chamado.length + idx + 1)));
       }
       col.appendChild(list);
 
