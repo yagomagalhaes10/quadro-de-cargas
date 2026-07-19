@@ -111,6 +111,35 @@
   }
   .icon-btn-top:hover { background: var(--panel-bg-alt); color: var(--text-primary); }
 
+  .dia-picker {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .dia-input {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    background: var(--panel-bg-alt);
+    border: 1px solid var(--divider);
+    border-radius: 6px;
+    width: 56px;
+    height: 28px;
+    text-align: center;
+    -moz-appearance: textfield;
+  }
+  .dia-input::-webkit-outer-spin-button,
+  .dia-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .dia-input:focus {
+    outline: 2px solid var(--text-primary);
+    outline-offset: 1px;
+  }
+
   /* ---------- Error banner ---------- */
   .error-banner {
     background: #331616;
@@ -361,11 +390,16 @@
       <div class="col-stats topbar-stats" id="globalStats"></div>
     </div>
     <div class="sync-info">
+      <span class="dia-picker">
+        <button class="icon-btn-top" id="diaPrevBtn" title="Dia anterior">◀</button>
+        <input id="diaQuickInput" class="dia-input" type="number" min="1" max="31" placeholder="hoje" title="Ver outro dia (deixe em branco para acompanhar o dia atual)" />
+        <button class="icon-btn-top" id="diaNextBtn" title="Próximo dia">▶</button>
+      </span>
       <span id="dayLabel">—</span>
       <span class="status-dot" id="statusDot"></span>
       <span id="syncedLabel">aguardando conexão</span>
       <button class="icon-btn-top" id="refreshBtn" title="Atualizar agora">⟳</button>
-      <button class="icon-btn-top" id="settingsBtn" title="Configurar conexão">⚙</button>
+      <button class="icon-btn-top" id="settingsBtn" title="Configurar link do Apps Script">⚙</button>
     </div>
   </div>
 
@@ -375,8 +409,6 @@
     <h2>Conectar à planilha</h2>
     <p>Cole aqui o link do Apps Script (Web App) implantado na planilha de cargas. Esse link fica salvo neste navegador.</p>
     <input id="urlInput" type="text" placeholder="https://script.google.com/macros/s/.../exec" />
-    <label for="diaInput" style="display:block; font-size:0.78rem; color:var(--text-secondary); margin-bottom:6px;">Dia do mês (opcional — deixe em branco para acompanhar o dia atual)</label>
-    <input id="diaInput" type="text" placeholder="ex: 17" style="max-width:100px;" />
     <button id="connectBtn">Conectar</button>
   </div>
 
@@ -435,9 +467,8 @@
 
   document.getElementById('connectBtn').addEventListener('click', () => {
     const url = document.getElementById('urlInput').value.trim();
-    const dia = document.getElementById('diaInput').value.trim();
     if (!url) return;
-    saveConfig(url, dia);
+    saveConfig(url, config ? config.dia : '');
     showBoard();
     fetchData();
     startPolling();
@@ -446,11 +477,33 @@
   document.getElementById('settingsBtn').addEventListener('click', () => {
     if (pollTimer) clearInterval(pollTimer);
     document.getElementById('urlInput').value = config ? config.url : '';
-    document.getElementById('diaInput').value = config ? (config.dia || '') : '';
     showConfig();
   });
 
   document.getElementById('refreshBtn').addEventListener('click', fetchData);
+
+  function currentDiaNumber() {
+    if (config && config.dia) return parseInt(config.dia, 10);
+    const label = document.getElementById('dayLabel').textContent || '';
+    const match = label.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : new Date().getDate();
+  }
+
+  function applyDia(newDia) {
+    const diaStr = newDia === '' || newDia == null ? '' : String(newDia);
+    document.getElementById('diaQuickInput').value = diaStr;
+    saveConfig(config ? config.url : '', diaStr);
+    if (config.url) fetchData();
+  }
+
+  const diaQuickInput = document.getElementById('diaQuickInput');
+  diaQuickInput.addEventListener('change', () => {
+    const v = diaQuickInput.value.trim();
+    applyDia(v === '' ? '' : parseInt(v, 10));
+  });
+  diaQuickInput.addEventListener('keydown', e => { if (e.key === 'Enter') diaQuickInput.blur(); });
+  document.getElementById('diaPrevBtn').addEventListener('click', () => applyDia(Math.max(1, currentDiaNumber() - 1)));
+  document.getElementById('diaNextBtn').addEventListener('click', () => applyDia(Math.min(31, currentDiaNumber() + 1)));
 
   function setStatusDot(s) {
     document.getElementById('statusDot').className = 'status-dot ' + s;
@@ -698,6 +751,9 @@
     config = loadConfig();
     if (!config && DEFAULT_APPS_SCRIPT_URL) {
       config = { url: DEFAULT_APPS_SCRIPT_URL, dia: '' };
+    }
+    if (config && config.dia) {
+      document.getElementById('diaQuickInput').value = config.dia;
     }
     if (config && config.url) {
       showBoard();
