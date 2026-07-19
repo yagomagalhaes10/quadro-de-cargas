@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quadro de Cargas — Mavaular</title>
+<style>
+  :root {
+    --board-bg: #12151a;
+    --panel-bg: #1c2129;
+    --panel-bg-alt: #242a34;
+    --panel-bg-hover: #2c3340;
+    --divider: #2c3340;
+    --text-primary: #f3f1ea;
+    --text-secondary: #8b93a1;
+    --amber: #ffb300;
+    --green: #46b880;
+    --red: #e56a6a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Roboto Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--board-bg);
+    color: var(--text-primary);
+    font-family: var(--sans);
+    min-height: 100vh;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--divider);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .brand-title {
+    font-weight: 800;
+    font-size: 1.15rem;
+    letter-spacing: 0.08em;
+    display: block;
+  }
+
+  .brand-sub {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.03em;
+  }
+
+  .sync-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+
+  #dayLabel {
+    font-family: var(--mono);
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.05em;
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    display: inline-block;
+  }
+  .status-dot.ok { background: var(--green); box-shadow: 0 0 0 0 rgba(70,184,128,0.6); animation: pulse 2s infinite; }
+  .status-dot.loading { background: var(--amber); animation: pulse 1s infinite; }
+  .status-dot.error { background: var(--red); }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(70,184,128,0.45); }
+    70% { box-shadow: 0 0 0 6px rgba(70,184,128,0); }
+    100% { box-shadow: 0 0 0 0 rgba(70,184,128,0); }
+  }
+
+  .icon-btn-top {
+    background: none;
+    border: 1px solid var(--divider);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  .icon-btn-top:hover { background: var(--panel-bg-alt); color: var(--text-primary); }
+
+  /* ---------- Error banner ---------- */
+  .error-banner {
+    background: #331616;
+    border: 1px solid #7a2a2a;
+    color: #ffb3b3;
+    padding: 10px 16px;
+    border-radius: 8px;
+    margin: 14px 24px 0;
+    font-size: 0.85rem;
+  }
+
+  /* ---------- Config screen ---------- */
+  .config-screen {
+    max-width: 480px;
+    margin: 12vh auto;
+    padding: 28px;
+    background: var(--panel-bg);
+    border-radius: 12px;
+    text-align: left;
+  }
+  .config-screen h2 {
+    margin-top: 0;
+    font-size: 1.1rem;
+    letter-spacing: 0.03em;
+  }
+  .config-screen p {
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+  .config-screen input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--divider);
+    background: var(--panel-bg-alt);
+    color: var(--text-primary);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+  .config-screen button {
+    background: var(--amber);
+    color: #1a1300;
+    border: none;
+    font-weight: 700;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .config-screen button:hover { filter: brightness(1.08); }
+
+  /* ---------- Board ---------- */
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    padding: 20px 24px 32px;
+  }
+  @media (max-width: 900px) {
+    .board { grid-template-columns: 1fr; }
+  }
+
+  .column {
+    background: var(--panel-bg);
+    border-left: 4px solid var(--accent, var(--amber));
+    border-radius: 10px;
+    padding: 14px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .column-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .col-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-line {
+    font-size: 0.75rem;
+    font-family: var(--mono);
+    color: var(--text-secondary);
+  }
+  .stat-line.pending {
+    color: var(--amber);
+    font-weight: 700;
+  }
+
+  .col-title {
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.92rem;
+  }
+
+  .card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .card {
+    background: var(--panel-bg-alt);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .card.loaded { opacity: 0.5; }
+  .card.loaded .descricao { text-decoration: line-through; }
+
+  .card.in-progress {
+    border-left: 3px solid var(--amber);
+    background: var(--panel-bg-hover);
+  }
+
+  .badge-progress {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--amber);
+    white-space: nowrap;
+  }
+
+  .group-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 2px 0 -4px;
+  }
+
+  .card.flip { animation: flipIn 0.35s ease; }
+  @keyframes flipIn {
+    from { transform: rotateX(70deg); opacity: 0; }
+    to { transform: rotateX(0deg); opacity: 1; }
+  }
+
+  .position-badge {
+    font-family: var(--mono);
+    font-weight: 800;
+    font-size: 0.85rem;
+    color: var(--accent, var(--amber));
+    background: var(--panel-bg-hover);
+    border: 1px solid var(--accent, var(--amber));
+    border-radius: 6px;
+    width: 32px;
+    height: 26px;
+    text-align: center;
+    flex-shrink: 0;
+    padding: 0;
+    -moz-appearance: textfield;
+  }
+  .position-badge::-webkit-outer-spin-button,
+  .position-badge::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .position-badge:focus {
+    outline: 2px solid var(--text-primary);
+    outline-offset: 1px;
+  }
+
+  .carga-chip {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    background: var(--panel-bg-hover);
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .descricao {
+    flex: 1;
+    font-weight: 700;
+    font-size: 0.9rem;
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+
+  .peso {
+    font-family: var(--mono);
+    font-weight: 800;
+    font-size: 0.95rem;
+    white-space: nowrap;
+  }
+
+  .actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .icon-btn {
+    background: var(--panel-bg-hover);
+    border: none;
+    color: var(--text-primary);
+    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .icon-btn:hover { background: var(--divider); }
+
+  .loaded-toggle {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px 2px;
+    user-select: none;
+  }
+  .loaded-toggle:hover { color: var(--text-primary); }
+
+  .loaded-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .empty-state {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    padding: 10px 4px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div>
+      <span class="brand-title">QUADRO DE CARGAS</span>
+      <span class="brand-sub">Mavaular · Expedição</span>
+    </div>
+    <div class="sync-info">
+      <span id="dayLabel">—</span>
+      <span class="status-dot" id="statusDot"></span>
+      <span id="syncedLabel">aguardando conexão</span>
+      <button class="icon-btn-top" id="refreshBtn" title="Atualizar agora">⟳</button>
+      <button class="icon-btn-top" id="settingsBtn" title="Configurar conexão">⚙</button>
+    </div>
+  </div>
+
+  <div id="errorBanner" class="error-banner" style="display:none;"></div>
+
+  <div id="configScreen" class="config-screen">
+    <h2>Conectar à planilha</h2>
+    <p>Cole aqui o link do Apps Script (Web App) implantado na planilha de cargas. Esse link fica salvo neste navegador.</p>
+    <input id="urlInput" type="text" placeholder="https://script.google.com/macros/s/.../exec" />
+    <label for="diaInput" style="display:block; font-size:0.78rem; color:var(--text-secondary); margin-bottom:6px;">Dia do mês (opcional — deixe em branco para acompanhar o dia atual)</label>
+    <input id="diaInput" type="text" placeholder="ex: 17" style="max-width:100px;" />
+    <button id="connectBtn">Conectar</button>
+  </div>
+
+  <div id="board" class="board" style="display:none;"></div>
+
+<script>
+  const SECTIONS = [
+    { key: 'ENTREGA',   label: 'Entrega',    accent: '#5b8def' },
+    { key: 'RETIRA',    label: 'Retira',     accent: '#f2a93b' },
+    { key: 'E-COMERCE', label: 'E-commerce', accent: '#b98be8' }
+  ];
+  const STORAGE_KEY = 'quadroCargasConfig';
+  const POLL_MS = 20000;
+
+  // Cole aqui o link .../exec do Apps Script para todo mundo que abrir o site
+  // já ver o quadro direto, sem precisar colar o link manualmente.
+  // Exemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
+  const DEFAULT_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycb.../exec';
+
+  let config = null;
+  let items = [];
+  let pollTimer = null;
+
+  function loadConfig() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  function saveConfig(url, dia) {
+    config = { url, dia: dia || '' };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch (e) {}
+  }
+
+  function buildUrl() {
+    if (!config || !config.url) return null;
+    if (!config.dia) return config.url;
+    const sep = config.url.indexOf('?') === -1 ? '?' : '&';
+    return config.url + sep + 'dia=' + encodeURIComponent(config.dia);
+  }
+
+  function showConfig() {
+    document.getElementById('configScreen').style.display = 'block';
+    document.getElementById('board').style.display = 'none';
+  }
+  function showBoard() {
+    document.getElementById('configScreen').style.display = 'none';
+    document.getElementById('board').style.display = 'grid';
+  }
+
+  function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(fetchData, POLL_MS);
+  }
+
+  document.getElementById('connectBtn').addEventListener('click', () => {
+    const url = document.getElementById('urlInput').value.trim();
+    const dia = document.getElementById('diaInput').value.trim();
+    if (!url) return;
+    saveConfig(url, dia);
+    showBoard();
+    fetchData();
+    startPolling();
+  });
+
+  document.getElementById('settingsBtn').addEventListener('click', () => {
+    if (pollTimer) clearInterval(pollTimer);
+    document.getElementById('urlInput').value = config ? config.url : '';
+    document.getElementById('diaInput').value = config ? (config.dia || '') : '';
+    showConfig();
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', fetchData);
+
+  function setStatusDot(s) {
+    document.getElementById('statusDot').className = 'status-dot ' + s;
+  }
+  function showError(msg) {
+    const b = document.getElementById('errorBanner');
+    b.textContent = msg;
+    b.style.display = 'block';
+  }
+  function hideError() {
+    document.getElementById('errorBanner').style.display = 'none';
+  }
+  function formatPeso(n) {
+    return (Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg';
+  }
+  function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
+  async function fetchData() {
+    if (!config || !config.url) return;
+    setStatusDot('loading');
+    try {
+      const res = await fetch(buildUrl(), { method: 'GET' });
+      const data = await res.json();
+      if (data.error) {
+        showError(data.error);
+        setStatusDot('error');
+        return;
+      }
+      hideError();
+      items = data.items || [];
+      document.getElementById('dayLabel').textContent = data.sheetName || '';
+      document.getElementById('syncedLabel').textContent =
+        'Atualizado ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      setStatusDot('ok');
+      render();
+    } catch (err) {
+      showError('Não foi possível falar com a planilha. Confira o link e se o Apps Script foi implantado com acesso "Qualquer pessoa".');
+      setStatusDot('error');
+    }
+  }
+
+  async function postAction(body) {
+    const res = await fetch(buildUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
+    });
+    return res.json();
+  }
+
+  async function setItemStatus(id, status) {
+    const it = items.find(i => i.id === id);
+    if (it) it.status = status;
+    render(id);
+    try {
+      const data = await postAction({ action: 'setStatus', id, status });
+      if (data.items) { items = data.items; render(); }
+    } catch (e) { fetchData(); }
+  }
+
+  async function moveToFront(item) {
+    const secActive = items
+      .filter(i => i.secao === item.secao && i.status !== 'CARREGADO')
+      .sort((a, b) => a.ordem - b.ordem);
+    const inProgress = secActive.filter(i => i.status === 'INICIADO');
+    const others = secActive.filter(i => i.status !== 'INICIADO' && i.id !== item.id);
+    const newOrderIds = [...inProgress.map(i => i.id), item.id, ...others.map(i => i.id)];
+    newOrderIds.forEach((id, idx) => {
+      const it = items.find(i => i.id === id);
+      if (it) it.ordem = idx + 1;
+    });
+    render(item.id);
+    try {
+      const data = await postAction({ action: 'reorder', order: newOrderIds });
+      if (data.items) { items = data.items; render(); }
+    } catch (e) { fetchData(); }
+  }
+
+  async function setPosition(item, rawValue) {
+    const target = parseInt(rawValue, 10);
+    const secAll = items.filter(i => i.secao === item.secao);
+    const inProgress = secAll.filter(i => i.status === 'INICIADO').sort((a, b) => a.ordem - b.ordem);
+    const pending = secAll.filter(i => !i.status).sort((a, b) => a.ordem - b.ordem);
+
+    const isInProgress = item.status === 'INICIADO';
+    const group = isInProgress ? inProgress : pending;
+    const offset = isInProgress ? 0 : inProgress.length;
+
+    if (isNaN(target) || group.length === 0) { render(); return; }
+
+    let idxTarget = target - offset; // posição 1-based dentro do próprio grupo
+    idxTarget = Math.max(1, Math.min(group.length, idxTarget));
+
+    const withoutItem = group.filter(i => i.id !== item.id);
+    withoutItem.splice(idxTarget - 1, 0, item);
+
+    const newOrderIds = isInProgress
+      ? [...withoutItem.map(i => i.id), ...pending.map(i => i.id)]
+      : [...inProgress.map(i => i.id), ...withoutItem.map(i => i.id)];
+
+    newOrderIds.forEach((id, idx) => {
+      const it = items.find(i => i.id === id);
+      if (it) it.ordem = idx + 1;
+    });
+
+    render(item.id);
+    try {
+      const data = await postAction({ action: 'reorder', order: newOrderIds });
+      if (data.items) { items = data.items; render(); }
+    } catch (e) { fetchData(); }
+  }
+
+  function mkBtn(icon, label, onClick) {
+    const b = document.createElement('button');
+    b.className = 'icon-btn';
+    b.innerHTML = icon;
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function buildCard(item, isFirstPending, highlightId, position) {
+    const status = item.status || '';
+    const card = document.createElement('div');
+    card.className = 'card'
+      + (status === 'CARREGADO' ? ' loaded' : '')
+      + (status === 'INICIADO' ? ' in-progress' : '')
+      + (item.id === highlightId ? ' flip' : '');
+    card.innerHTML =
+      (position != null ? '<input type="number" class="position-badge" value="' + position + '" min="1" />' : '') +
+      '<span class="carga-chip">' + escapeHtml(item.carga || '—') + '</span>' +
+      '<span class="descricao">' + escapeHtml(item.descricao) + '</span>' +
+      (status === 'INICIADO' ? '<span class="badge-progress">EM ANDAMENTO</span>' : '') +
+      '<span class="peso">' + formatPeso(item.peso) + '</span>' +
+      '<span class="actions"></span>';
+
+    if (position != null) {
+      const posInput = card.querySelector('.position-badge');
+      posInput.addEventListener('click', e => { e.stopPropagation(); posInput.select(); });
+      posInput.addEventListener('keydown', e => { if (e.key === 'Enter') posInput.blur(); });
+      posInput.addEventListener('change', () => setPosition(item, posInput.value));
+    }
+
+    const actions = card.querySelector('.actions');
+
+    if (status === 'CARREGADO') {
+      actions.appendChild(mkBtn('↺', 'Desfazer conclusão', () => setItemStatus(item.id, 'INICIADO')));
+    } else if (status === 'INICIADO') {
+      actions.appendChild(mkBtn('↺', 'Cancelar início', () => setItemStatus(item.id, '')));
+      actions.appendChild(mkBtn('✓', 'Marcar concluído', () => setItemStatus(item.id, 'CARREGADO')));
+    } else {
+      if (!isFirstPending) {
+        actions.appendChild(mkBtn('⤒', 'Passar na frente', () => moveToFront(item)));
+      }
+      actions.appendChild(mkBtn('▶', 'Iniciar carregamento', () => setItemStatus(item.id, 'INICIADO')));
+    }
+    return card;
+  }
+
+  function render(highlightId) {
+    const board = document.getElementById('board');
+    board.innerHTML = '';
+    SECTIONS.forEach(sec => {
+      const secItems = items.filter(i => i.secao === sec.key);
+      const inProgress = secItems.filter(i => i.status === 'INICIADO').sort((a, b) => a.ordem - b.ordem);
+      const pending = secItems.filter(i => !i.status).sort((a, b) => a.ordem - b.ordem);
+      const loaded = secItems.filter(i => i.status === 'CARREGADO').sort((a, b) => a.ordem - b.ordem);
+
+      const totalCount = secItems.length;
+      const totalKg = secItems.reduce((s, i) => s + i.peso, 0);
+      const pendingCount = pending.length + inProgress.length;
+      const pendingKg = [...inProgress, ...pending].reduce((s, i) => s + i.peso, 0);
+
+      const col = document.createElement('div');
+      col.className = 'column';
+      col.style.setProperty('--accent', sec.accent);
+
+      const header = document.createElement('div');
+      header.className = 'column-header';
+      header.innerHTML =
+        '<span class="col-title">' + sec.label + '</span>' +
+        '<div class="col-stats">' +
+          '<span class="stat-line">Hoje: ' + totalCount + ' carga(s) · ' + formatPeso(totalKg) + '</span>' +
+          '<span class="stat-line pending">Pendente: ' + pendingCount + ' carga(s) · ' + formatPeso(pendingKg) + '</span>' +
+        '</div>';
+      col.appendChild(header);
+
+      const list = document.createElement('div');
+      list.className = 'card-list';
+
+      if (inProgress.length > 0) {
+        const label = document.createElement('div');
+        label.className = 'group-label';
+        label.textContent = 'Em andamento';
+        list.appendChild(label);
+        inProgress.forEach((item, idx) => list.appendChild(buildCard(item, false, highlightId, idx + 1)));
+      }
+
+      if (pending.length === 0 && inProgress.length === 0) {
+        list.innerHTML += '<div class="empty-state">Nenhuma carga pendente nesta seção.</div>';
+      } else {
+        pending.forEach((item, idx) => list.appendChild(buildCard(item, idx === 0, highlightId, inProgress.length + idx + 1)));
+      }
+      col.appendChild(list);
+
+      const toggle = document.createElement('div');
+      toggle.className = 'loaded-toggle';
+      toggle.textContent = 'Carregados (' + loaded.length + ') ▾';
+      col.appendChild(toggle);
+
+      const loadedList = document.createElement('div');
+      loadedList.className = 'loaded-list';
+      loadedList.style.display = 'none';
+      loaded.forEach(item => loadedList.appendChild(buildCard(item, false, highlightId)));
+      col.appendChild(loadedList);
+
+      toggle.addEventListener('click', () => {
+        const isHidden = loadedList.style.display === 'none';
+        loadedList.style.display = isHidden ? 'flex' : 'none';
+        toggle.textContent = 'Carregados (' + loaded.length + ') ' + (isHidden ? '▴' : '▾');
+      });
+
+      board.appendChild(col);
+    });
+  }
+
+  function init() {
+    config = loadConfig();
+    if (!config && DEFAULT_APPS_SCRIPT_URL) {
+      config = { url: DEFAULT_APPS_SCRIPT_URL, dia: '' };
+    }
+    if (config && config.url) {
+      showBoard();
+      fetchData();
+      startPolling();
+    } else {
+      showConfig();
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
