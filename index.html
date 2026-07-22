@@ -274,6 +274,22 @@
     50% { background: rgba(255, 179, 0, 0.30); }
   }
 
+  .card.arrived {
+    border-left: 3px solid #5b8def;
+    background: rgba(91, 141, 239, 0.12);
+  }
+
+  .badge-arrived {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #eaf0ff;
+    background: #5b8def;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
   .badge-called {
     font-size: 0.7rem;
     font-weight: 800;
@@ -445,6 +461,11 @@
     { key: 'RETIRA',    label: 'Retira',     accent: '#f2a93b' },
     { key: 'E-COMERCE', label: 'E-commerce', accent: '#b98be8' }
   ];
+
+  // Ordem de exibição dos status ainda não concluídos, do mais avançado (mais perto de carregar)
+  // até o mais atrás na fila. '' representa "pendente".
+  const ACTIVE_STATUSES = ['INICIADO', 'CHEGOU', 'CHAMADO', ''];
+  const GROUP_LABELS = { INICIADO: 'Em andamento', CHEGOU: 'Chegou', CHAMADO: 'Chamado(s)' };
   const STORAGE_KEY = 'quadroCargasConfig';
   const POLL_MS = 20000;
 
@@ -593,7 +614,7 @@
     } catch (e) { fetchData(); }
   }
 
-  async function callToDock(item) {
+  async function setStatusAndPromote(item, newStatus) {
     const secActive = items
       .filter(i => i.secao === item.secao && i.status !== 'CARREGADO')
       .sort((a, b) => a.ordem - b.ordem);
@@ -605,44 +626,41 @@
       if (it) it.ordem = idx + 1;
     });
     const target = items.find(i => i.id === item.id);
-    if (target) target.status = 'CHAMADO';
+    if (target) target.status = newStatus;
     render(item.id);
     try {
       await postAction({ action: 'reorder', order: newOrderIds });
-      const data = await postAction({ action: 'setStatus', id: item.id, status: 'CHAMADO' });
+      const data = await postAction({ action: 'setStatus', id: item.id, status: newStatus });
       if (data.items) { items = data.items; render(); }
     } catch (e) { fetchData(); }
   }
 
   async function setPosition(item, rawValue) {
     const target = parseInt(rawValue, 10);
-    const secAll = items.filter(i => i.secao === item.secao);
-    const inProgress = secAll.filter(i => i.status === 'INICIADO').sort((a, b) => a.ordem - b.ordem);
-    const chamado = secAll.filter(i => i.status === 'CHAMADO').sort((a, b) => a.ordem - b.ordem);
-    const pending = secAll.filter(i => !i.status).sort((a, b) => a.ordem - b.ordem);
+    const secAll = items.filter(i => i.secao === item.secao && i.status !== 'CARREGADO');
+    const groups = {};
+    ACTIVE_STATUSES.forEach(key => {
+      groups[key] = secAll.filter(i => (i.status || '') === key).sort((a, b) => a.ordem - b.ordem);
+    });
 
-    let group, offset;
-    if (item.status === 'INICIADO') { group = inProgress; offset = 0; }
-    else if (item.status === 'CHAMADO') { group = chamado; offset = inProgress.length; }
-    else { group = pending; offset = inProgress.length + chamado.length; }
+    const itemStatus = item.status || '';
+    const group = groups[itemStatus];
+    let offset = 0;
+    for (const key of ACTIVE_STATUSES) {
+      if (key === itemStatus) break;
+      offset += groups[key].length;
+    }
 
-    if (isNaN(target) || group.length === 0) { render(); return; }
+    if (isNaN(target) || !group || group.length === 0) { render(); return; }
 
     let idxTarget = target - offset; // posição 1-based dentro do próprio grupo
     idxTarget = Math.max(1, Math.min(group.length, idxTarget));
 
     const withoutItem = group.filter(i => i.id !== item.id);
     withoutItem.splice(idxTarget - 1, 0, item);
+    groups[itemStatus] = withoutItem;
 
-    let newOrderIds;
-    if (item.status === 'INICIADO') {
-      newOrderIds = [...withoutItem.map(i => i.id), ...chamado.map(i => i.id), ...pending.map(i => i.id)];
-    } else if (item.status === 'CHAMADO') {
-      newOrderIds = [...inProgress.map(i => i.id), ...withoutItem.map(i => i.id), ...pending.map(i => i.id)];
-    } else {
-      newOrderIds = [...inProgress.map(i => i.id), ...chamado.map(i => i.id), ...withoutItem.map(i => i.id)];
-    }
-
+    const newOrderIds = ACTIVE_STATUSES.flatMap(key => groups[key].map(i => i.id));
     newOrderIds.forEach((id, idx) => {
       const it = items.find(i => i.id === id);
       if (it) it.ordem = idx + 1;
@@ -672,6 +690,7 @@
       + (status === 'CARREGADO' ? ' loaded' : '')
       + (status === 'INICIADO' ? ' in-progress' : '')
       + (status === 'CHAMADO' ? ' called' : '')
+      + (status === 'CHEGOU' ? ' arrived' : '')
       + (item.id === highlightId ? ' flip' : '');
     card.innerHTML =
       (position != null ? '<input type="number" class="position-badge" value="' + position + '" min="1" />' : '') +
@@ -679,6 +698,7 @@
       '<span class="descricao">' + escapeHtml(item.descricao) + '</span>' +
       (status === 'INICIADO' ? '<span class="badge-progress">EM ANDAMENTO</span>' : '') +
       (status === 'CHAMADO' ? '<span class="badge-called">🔔 IR PARA DOCA</span>' : '') +
+      (status === 'CHEGOU' ? '<span class="badge-arrived">🔵 CHEGOU</span>' : '') +
       '<span class="peso">' + formatPeso(item.peso) + '</span>' +
       '<span class="actions"></span>';
 
@@ -696,11 +716,16 @@
     } else if (status === 'INICIADO') {
       actions.appendChild(mkBtn('↺', 'Cancelar início', () => setItemStatus(item.id, '')));
       actions.appendChild(mkBtn('✓', 'Marcar concluído', () => setItemStatus(item.id, 'CARREGADO')));
+    } else if (status === 'CHEGOU') {
+      actions.appendChild(mkBtn('↺', 'Desfazer chegada', () => setItemStatus(item.id, '')));
+      actions.appendChild(mkBtn('▶', 'Iniciar carregamento', () => setItemStatus(item.id, 'INICIADO')));
     } else if (status === 'CHAMADO') {
       actions.appendChild(mkBtn('↺', 'Cancelar chamada', () => setItemStatus(item.id, '')));
+      actions.appendChild(mkBtn('🔵', 'Freteiro chegou', () => setStatusAndPromote(item, 'CHEGOU')));
       actions.appendChild(mkBtn('▶', 'Iniciar carregamento', () => setItemStatus(item.id, 'INICIADO')));
     } else {
-      actions.appendChild(mkBtn('🔔', 'Chamar para a doca', () => callToDock(item)));
+      actions.appendChild(mkBtn('🔔', 'Chamar para a doca', () => setStatusAndPromote(item, 'CHAMADO')));
+      actions.appendChild(mkBtn('🔵', 'Freteiro chegou', () => setStatusAndPromote(item, 'CHEGOU')));
       actions.appendChild(mkBtn('▶', 'Iniciar carregamento', () => setItemStatus(item.id, 'INICIADO')));
     }
     return card;
@@ -723,15 +748,17 @@
     board.innerHTML = '';
     SECTIONS.forEach(sec => {
       const secItems = items.filter(i => i.secao === sec.key);
-      const inProgress = secItems.filter(i => i.status === 'INICIADO').sort((a, b) => a.ordem - b.ordem);
-      const chamado = secItems.filter(i => i.status === 'CHAMADO').sort((a, b) => a.ordem - b.ordem);
-      const pending = secItems.filter(i => !i.status).sort((a, b) => a.ordem - b.ordem);
+      const groups = {};
+      ACTIVE_STATUSES.forEach(key => {
+        groups[key] = secItems.filter(i => (i.status || '') === key).sort((a, b) => a.ordem - b.ordem);
+      });
       const loaded = secItems.filter(i => i.status === 'CARREGADO').sort((a, b) => a.ordem - b.ordem);
 
       const totalCount = secItems.length;
       const totalKg = secItems.reduce((s, i) => s + i.peso, 0);
-      const pendingCount = pending.length + chamado.length + inProgress.length;
-      const pendingKg = [...inProgress, ...chamado, ...pending].reduce((s, i) => s + i.peso, 0);
+      const activeAll = ACTIVE_STATUSES.flatMap(key => groups[key]);
+      const pendingCount = activeAll.length;
+      const pendingKg = activeAll.reduce((s, i) => s + i.peso, 0);
 
       const col = document.createElement('div');
       col.className = 'column';
@@ -750,26 +777,23 @@
       const list = document.createElement('div');
       list.className = 'card-list';
 
-      if (inProgress.length > 0) {
-        const label = document.createElement('div');
-        label.className = 'group-label';
-        label.textContent = 'Em andamento';
-        list.appendChild(label);
-        inProgress.forEach((item, idx) => list.appendChild(buildCard(item, false, highlightId, idx + 1)));
-      }
+      let runningOffset = 0;
+      ACTIVE_STATUSES.forEach(key => {
+        const group = groups[key];
+        if (group.length === 0) return;
+        if (GROUP_LABELS[key]) {
+          const label = document.createElement('div');
+          label.className = 'group-label';
+          label.textContent = GROUP_LABELS[key];
+          list.appendChild(label);
+        }
+        const offsetForGroup = runningOffset;
+        group.forEach((item, idx) => list.appendChild(buildCard(item, idx === 0, highlightId, offsetForGroup + idx + 1)));
+        runningOffset += group.length;
+      });
 
-      if (chamado.length > 0) {
-        const label = document.createElement('div');
-        label.className = 'group-label';
-        label.textContent = 'Chamado(s)';
-        list.appendChild(label);
-        chamado.forEach((item, idx) => list.appendChild(buildCard(item, false, highlightId, inProgress.length + idx + 1)));
-      }
-
-      if (pending.length === 0 && inProgress.length === 0 && chamado.length === 0) {
+      if (activeAll.length === 0) {
         list.innerHTML += '<div class="empty-state">Nenhuma carga pendente nesta seção.</div>';
-      } else {
-        pending.forEach((item, idx) => list.appendChild(buildCard(item, idx === 0, highlightId, inProgress.length + chamado.length + idx + 1)));
       }
       col.appendChild(list);
 
@@ -815,3 +839,4 @@
 </script>
 </body>
 </html>
+
