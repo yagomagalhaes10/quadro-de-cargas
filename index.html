@@ -140,6 +140,27 @@
     outline-offset: 1px;
   }
 
+  .view-toggle {
+    display: flex;
+    border: 1px solid var(--divider);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .view-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  .view-toggle-btn.active {
+    background: var(--panel-bg-hover);
+    color: var(--text-primary);
+    font-weight: 700;
+  }
+  .view-toggle-btn:hover { color: var(--text-primary); }
+
   /* ---------- Error banner ---------- */
   .error-banner {
     background: #331616;
@@ -437,6 +458,10 @@
         <button class="icon-btn-top" id="diaNextBtn" title="Próximo dia">▶</button>
       </span>
       <span id="dayLabel">—</span>
+      <div class="view-toggle" id="viewToggle">
+        <button class="view-toggle-btn" data-mode="completo">Completo</button>
+        <button class="view-toggle-btn" data-mode="simples">Simples</button>
+      </div>
       <span class="status-dot" id="statusDot"></span>
       <span id="syncedLabel">aguardando conexão</span>
       <button class="icon-btn-top" id="refreshBtn" title="Atualizar agora">⟳</button>
@@ -477,6 +502,8 @@
   let config = null;
   let items = [];
   let pollTimer = null;
+  let viewMode = 'completo';
+  try { viewMode = localStorage.getItem('quadroCargasViewMode') || 'completo'; } catch (e) {}
 
   function loadConfig() {
     try {
@@ -527,6 +554,20 @@
   });
 
   document.getElementById('refreshBtn').addEventListener('click', fetchData);
+
+  function applyViewToggleUI() {
+    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === viewMode);
+    });
+  }
+  document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      viewMode = btn.dataset.mode;
+      try { localStorage.setItem('quadroCargasViewMode', viewMode); } catch (e) {}
+      applyViewToggleUI();
+      render();
+    });
+  });
 
   function currentDiaNumber() {
     if (config && config.dia) return parseInt(config.dia, 10);
@@ -731,6 +772,12 @@
     return card;
   }
 
+  function statLine(prefix, count, kg) {
+    let line = prefix + ': ' + count + ' carga(s)';
+    if (viewMode === 'completo') line += ' · ' + formatPeso(kg);
+    return line;
+  }
+
   function renderGlobalStats() {
     const totalCount = items.length;
     const totalKg = items.reduce((s, i) => s + i.peso, 0);
@@ -738,8 +785,8 @@
     const pendingCount = pendingItems.length;
     const pendingKg = pendingItems.reduce((s, i) => s + i.peso, 0);
     document.getElementById('globalStats').innerHTML =
-      '<span class="stat-line">Hoje: ' + totalCount + ' carga(s) · ' + formatPeso(totalKg) + '</span>' +
-      '<span class="stat-line pending">Pendente: ' + pendingCount + ' carga(s) · ' + formatPeso(pendingKg) + '</span>';
+      '<span class="stat-line">' + statLine('Hoje', totalCount, totalKg) + '</span>' +
+      '<span class="stat-line pending">' + statLine('Pendente', pendingCount, pendingKg) + '</span>';
   }
 
   function render(highlightId) {
@@ -769,8 +816,8 @@
       header.innerHTML =
         '<span class="col-title">' + sec.label + '</span>' +
         '<div class="col-stats">' +
-          '<span class="stat-line">Hoje: ' + totalCount + ' carga(s) · ' + formatPeso(totalKg) + '</span>' +
-          '<span class="stat-line pending">Pendente: ' + pendingCount + ' carga(s) · ' + formatPeso(pendingKg) + '</span>' +
+          '<span class="stat-line">' + statLine('Hoje', totalCount, totalKg) + '</span>' +
+          '<span class="stat-line pending">' + statLine('Pendente', pendingCount, pendingKg) + '</span>' +
         '</div>';
       col.appendChild(header);
 
@@ -819,6 +866,7 @@
   }
 
   function init() {
+    applyViewToggleUI();
     config = loadConfig();
     if (!config && DEFAULT_APPS_SCRIPT_URL) {
       config = { url: DEFAULT_APPS_SCRIPT_URL, dia: '' };
@@ -839,5 +887,6 @@
 </script>
 </body>
 </html>
+
 
 
