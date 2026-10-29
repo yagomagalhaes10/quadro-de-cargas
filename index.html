@@ -573,10 +573,11 @@
     try {
       const n = new Notification(title + (sec ? ' — ' + sec.label : ''), {
         body: parts.join(' · '),
+        requireInteraction: true,
         tag: 'carga-' + item.id + '-' + (item.status || 'pendente') + '-' + Date.now()
       });
       n.onclick = () => { window.focus(); n.close(); };
-    } catch (e) {}
+    } catch (e) { console.warn('Falha ao mostrar notificação:', e); }
   }
 
   function checkStatusChanges(sheetName) {
@@ -597,6 +598,27 @@
     knownSheet = sheet;
   }
 
+  // Teste: dispara uma notificação em 10 s para dar tempo de minimizar a janela.
+  let notifTestRunning = false;
+  function runNotifTest() {
+    if (notifTestRunning) return;
+    notifTestRunning = true;
+    const btn = document.getElementById('notifBtn');
+    let left = 10;
+    const tick = () => {
+      if (left > 0) {
+        btn.textContent = '⏳ Minimize agora… ' + left + 's';
+        left--;
+        setTimeout(tick, 1000);
+      } else {
+        sendNotification({ id: 'teste', secao: '', carga: '', descricao: 'Se você está vendo isto, as notificações funcionam neste computador.', peso: 0, status: '' }, '✅ Teste de aviso do Quadro de Cargas');
+        notifTestRunning = false;
+        updateNotifBtn();
+      }
+    };
+    tick();
+  }
+
   function updateNotifBtn() {
     const btn = document.getElementById('notifBtn');
     if (!notifSupported()) { btn.style.display = 'none'; return; }
@@ -605,7 +627,7 @@
     if (perm === 'granted') {
       btn.className = 'notif-btn on';
       btn.textContent = '🔔 Avisos ativos';
-      btn.title = 'Este computador recebe notificação quando outra tela mudar uma carga. Clique para testar.';
+      btn.title = 'Este computador recebe notificação quando outra tela mudar uma carga. Clique para testar (a notificação chega em 10 s — minimize a janela para conferir).';
     } else if (perm === 'denied') {
       btn.className = 'notif-btn off';
       btn.textContent = '🔕 Avisos bloqueados';
@@ -620,7 +642,7 @@
   document.getElementById('notifBtn').addEventListener('click', async () => {
     if (!notifSupported()) return;
     if (Notification.permission === 'granted') {
-      sendNotification({ id: 'teste', secao: '', carga: '', descricao: 'As notificações estão funcionando neste computador.', peso: 0, status: '' }, '✅ Teste de aviso');
+      runNotifTest();
       return;
     }
     if (Notification.permission === 'denied') {
@@ -660,10 +682,29 @@
     document.getElementById('board').style.display = 'grid';
   }
 
-  function startPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(fetchData, POLL_MS);
+  // Com a janela minimizada o Chrome "congela" os timers da página (até 1 vez por minuto ou menos).
+  // Por isso o relógio da atualização roda num Worker, que o navegador não segura do mesmo jeito.
+  let pollWorker = null;
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (pollWorker) { pollWorker.terminate(); pollWorker = null; }
   }
+  function startPolling() {
+    stopPolling();
+    try {
+      const code = 'let t=null;onmessage=e=>{clearInterval(t);t=setInterval(()=>postMessage(1),e.data);};';
+      pollWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+      pollWorker.onmessage = () => fetchData();
+      pollWorker.postMessage(POLL_MS);
+    } catch (e) {
+      pollWorker = null;
+      pollTimer = setInterval(fetchData, POLL_MS);
+    }
+  }
+  // Ao voltar para a janela, atualiza na hora.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && config && config.url) fetchData();
+  });
 
   document.getElementById('connectBtn').addEventListener('click', () => {
     const url = document.getElementById('urlInput').value.trim();
@@ -675,7 +716,7 @@
   });
 
   document.getElementById('settingsBtn').addEventListener('click', () => {
-    if (pollTimer) clearInterval(pollTimer);
+    stopPolling();
     document.getElementById('urlInput').value = config ? config.url : '';
     showConfig();
   });
@@ -1019,6 +1060,7 @@
 </script>
 </body>
 </html>
+
 
 
 
