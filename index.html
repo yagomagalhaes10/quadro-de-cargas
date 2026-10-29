@@ -457,6 +457,52 @@
   .notif-btn.pending { border-color: var(--amber); color: var(--amber); animation: blinkText 1.4s infinite; }
   .notif-btn.on { border-color: var(--green); color: var(--green); }
   .notif-btn.off { border-color: var(--red); color: var(--red); }
+
+  .notif-wrap { position: relative; display: inline-flex; gap: 4px; }
+  .notif-filter-btn {
+    background: none;
+    border: 1px solid var(--divider);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    height: 30px;
+    padding: 0 8px;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .notif-filter-btn:hover { background: var(--panel-bg-alt); color: var(--text-primary); }
+  .notif-panel {
+    position: absolute;
+    top: 36px;
+    right: 0;
+    z-index: 50;
+    background: var(--panel-bg);
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    padding: 12px 14px;
+    min-width: 230px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .notif-panel-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  .notif-panel label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .notif-panel input { accent-color: var(--sec-color, var(--amber)); width: 16px; height: 16px; cursor: pointer; }
+  .notif-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .notif-panel-hint { font-size: 0.72rem; color: var(--text-secondary); line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -482,7 +528,11 @@
       </div>
       <span class="status-dot" id="statusDot"></span>
       <span id="syncedLabel">aguardando conexão</span>
-      <button class="notif-btn" id="notifBtn" style="display:none;"></button>
+      <span class="notif-wrap" id="notifWrap" style="display:none;">
+        <button class="notif-btn" id="notifBtn"></button>
+        <button class="notif-filter-btn" id="notifFilterBtn" title="Escolher de quais seções este computador recebe aviso">▾</button>
+        <div class="notif-panel" id="notifPanel" style="display:none;"></div>
+      </span>
       <button class="icon-btn-top" id="refreshBtn" title="Atualizar agora">⟳</button>
       <button class="icon-btn-top" id="settingsBtn" title="Configurar link do Apps Script">⚙</button>
     </div>
@@ -548,6 +598,60 @@
 
   function notifSupported() { return 'Notification' in window; }
 
+  // Filtro por seção — vale só para este computador (fica salvo no navegador).
+  const NOTIF_SECOES_KEY = 'quadroCargasNotifSecoes';
+  let notifSecoes = SECTIONS.map(s => s.key);
+  try {
+    const saved = JSON.parse(localStorage.getItem(NOTIF_SECOES_KEY));
+    if (Array.isArray(saved)) notifSecoes = saved.filter(k => SECTIONS.some(s => s.key === k));
+  } catch (e) {}
+  function saveNotifSecoes() {
+    try { localStorage.setItem(NOTIF_SECOES_KEY, JSON.stringify(notifSecoes)); } catch (e) {}
+  }
+  function notifSecoesLabel() {
+    if (notifSecoes.length === SECTIONS.length) return '';
+    if (notifSecoes.length === 0) return 'nenhuma seção';
+    return SECTIONS.filter(s => notifSecoes.includes(s.key)).map(s => s.label).join(' + ');
+  }
+
+  function buildNotifPanel() {
+    const panel = document.getElementById('notifPanel');
+    panel.innerHTML = '<span class="notif-panel-title">Receber avisos de</span>';
+    SECTIONS.forEach(sec => {
+      const label = document.createElement('label');
+      label.style.setProperty('--sec-color', sec.accent);
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = notifSecoes.includes(sec.key);
+      cb.addEventListener('change', () => {
+        notifSecoes = SECTIONS.map(s => s.key).filter(k =>
+          k === sec.key ? cb.checked : notifSecoes.includes(k));
+        saveNotifSecoes();
+        updateNotifBtn();
+      });
+      const dot = document.createElement('span');
+      dot.className = 'notif-dot';
+      dot.style.background = sec.accent;
+      label.appendChild(cb);
+      label.appendChild(dot);
+      label.appendChild(document.createTextNode(sec.label));
+      panel.appendChild(label);
+    });
+    const hint = document.createElement('span');
+    hint.className = 'notif-panel-hint';
+    hint.textContent = 'Vale só para este computador. O quadro continua mostrando todas as seções.';
+    panel.appendChild(hint);
+  }
+
+  document.getElementById('notifFilterBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    const panel = document.getElementById('notifPanel');
+    if (panel.style.display === 'none') { buildNotifPanel(); panel.style.display = 'flex'; }
+    else panel.style.display = 'none';
+  });
+  document.getElementById('notifPanel').addEventListener('click', e => e.stopPropagation());
+  document.addEventListener('click', () => { document.getElementById('notifPanel').style.display = 'none'; });
+
   function markLocalChange(id, to) {
     const it = items.find(i => i.id === id);
     localChanges[id] = { from: it ? (it.status || '') : '', to: to || '', t: Date.now() };
@@ -590,6 +694,7 @@
         const prev = knownStatus[i.id];
         if (prev === undefined || prev === st) return;
         if (isOwnChange(i.id, st)) return;
+        if (!notifSecoes.includes(i.secao)) return;
         const title = notifTitle(prev, st);
         if (title) sendNotification(i, title);
       });
@@ -621,12 +726,14 @@
 
   function updateNotifBtn() {
     const btn = document.getElementById('notifBtn');
-    if (!notifSupported()) { btn.style.display = 'none'; return; }
-    btn.style.display = '';
+    const wrap = document.getElementById('notifWrap');
+    if (!notifSupported()) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
     const perm = Notification.permission;
     if (perm === 'granted') {
       btn.className = 'notif-btn on';
-      btn.textContent = '🔔 Avisos ativos';
+      const filtro = notifSecoesLabel();
+      btn.textContent = filtro ? '🔔 Avisos: ' + filtro : '🔔 Avisos ativos';
       btn.title = 'Este computador recebe notificação quando outra tela mudar uma carga. Clique para testar (a notificação chega em 10 s — minimize a janela para conferir).';
     } else if (perm === 'denied') {
       btn.className = 'notif-btn off';
