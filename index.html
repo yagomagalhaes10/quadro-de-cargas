@@ -440,115 +440,23 @@
     text-align: center;
   }
 
-  /* ---------- Pop-up de chegada ---------- */
-  .arrival-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(8, 10, 14, 0.72);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 16px;
-    animation: fadeIn 0.2s ease;
-  }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-  .arrival-popup {
-    --accent: #5b8def;
-    --sec: #5b8def;
-    width: min(560px, 100%);
-    background: var(--panel-bg);
-    border: 2px solid var(--accent);
-    border-radius: 14px;
-    padding: 26px 28px 22px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.55);
-    animation: popIn 0.3s ease;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  @keyframes popIn {
-    from { transform: scale(0.85); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-  }
-
-  .arrival-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  .arrival-title {
-    font-weight: 800;
-    font-size: 1.5rem;
-    letter-spacing: 0.06em;
-    color: var(--accent);
-  }
-  .arrival-sec {
-    font-size: 0.75rem;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--sec);
-    border: 1px solid var(--sec);
-    padding: 3px 8px;
-    border-radius: 4px;
+  /* ---------- Botão de notificações ---------- */
+  .notif-btn {
+    background: none;
+    border: 1px solid var(--divider);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
     white-space: nowrap;
   }
-  .arrival-carga {
-    font-family: var(--mono);
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-  }
-  .arrival-desc {
-    font-weight: 800;
-    font-size: 1.35rem;
-    line-height: 1.3;
-    overflow-wrap: break-word;
-  }
-  .arrival-peso {
-    font-family: var(--mono);
-    font-weight: 800;
-    font-size: 1rem;
-  }
-  .arrival-foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 4px;
-  }
-  .arrival-queue {
-    font-size: 0.78rem;
-    color: var(--amber);
-    font-weight: 700;
-  }
-  .arrival-ok {
-    background: var(--accent);
-    color: var(--ok-text, #fff);
-    border: none;
-    font-weight: 800;
-    letter-spacing: 0.05em;
-    padding: 10px 26px;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  .arrival-ok:hover { filter: brightness(1.1); }
-  .arrival-timer {
-    height: 3px;
-    background: var(--divider);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .arrival-timer span {
-    display: block;
-    height: 100%;
-    background: var(--accent);
-    animation: drain linear forwards;
-  }
-  @keyframes drain { from { width: 100%; } to { width: 0%; } }
+  .notif-btn:hover { background: var(--panel-bg-alt); color: var(--text-primary); }
+  .notif-btn.pending { border-color: var(--amber); color: var(--amber); animation: blinkText 1.4s infinite; }
+  .notif-btn.on { border-color: var(--green); color: var(--green); }
+  .notif-btn.off { border-color: var(--red); color: var(--red); }
 </style>
 </head>
 <body>
@@ -574,6 +482,7 @@
       </div>
       <span class="status-dot" id="statusDot"></span>
       <span id="syncedLabel">aguardando conexão</span>
+      <button class="notif-btn" id="notifBtn" style="display:none;"></button>
       <button class="icon-btn-top" id="refreshBtn" title="Atualizar agora">⟳</button>
       <button class="icon-btn-top" id="settingsBtn" title="Configurar link do Apps Script">⚙</button>
     </div>
@@ -589,23 +498,6 @@
   </div>
 
   <div id="board" class="board" style="display:none;"></div>
-
-  <div id="arrivalOverlay" class="arrival-overlay" style="display:none;" role="alertdialog" aria-live="assertive">
-    <div class="arrival-popup" id="arrivalPopup">
-      <div class="arrival-head">
-        <span class="arrival-title" id="arrivalTitle"></span>
-        <span class="arrival-sec" id="arrivalSec"></span>
-      </div>
-      <span class="arrival-carga" id="arrivalCarga"></span>
-      <span class="arrival-desc" id="arrivalDesc"></span>
-      <span class="arrival-peso" id="arrivalPeso"></span>
-      <div class="arrival-timer"><span id="arrivalTimer"></span></div>
-      <div class="arrival-foot">
-        <span class="arrival-queue" id="arrivalQueue"></span>
-        <button class="arrival-ok" id="arrivalOk">OK</button>
-      </div>
-    </div>
-  </div>
 
 <script>
   const SECTIONS = [
@@ -631,34 +523,63 @@
   let pollTimer = null;
   let viewMode = 'completo';
 
-  // ---------- Pop-up de mudança de status ----------
-  // Aparece em todas as telas abertas quando uma carga é chamada, chega, inicia ou é concluída
-  // (marcada aqui ou em outro computador — nesse caso aparece na próxima atualização, até 20 s).
-  const POPUP_STATUS = {
-    CHAMADO:   { title: '🔔 CHAMAR PARA A DOCA',      color: '#ffb300', okText: '#1a1300' },
-    CHEGOU:    { title: '🔵 FRETEIRO CHEGOU',         color: '#5b8def', okText: '#ffffff' },
-    INICIADO:  { title: '▶ EM ANDAMENTO',   color: '#ff7a3d', okText: '#1a0a00' },
-    CARREGADO: { title: '✓ CONCLUÍDO',  color: '#46b880', okText: '#04190f' }
+  // ---------- Notificações no computador ----------
+  // Quando alguém muda o status de uma carga, os OUTROS computadores com o site aberto
+  // recebem uma notificação do Windows (mesmo com o navegador minimizado ou em outra aba).
+  // Quem fez a ação não recebe. As mudanças chegam pela atualização automática (a cada 20 s;
+  // com a aba em segundo plano o navegador pode espaçar para até ~1 min).
+  const NOTIF_STATUS = {
+    CHAMADO:   '🔔 Chamado para a doca',
+    CHEGOU:    '🔵 Freteiro chegou',
+    INICIADO:  '▶ Carregamento em andamento',
+    CARREGADO: '✓ Carregamento concluído'
   };
-  // Desfazer: chave = status anterior → status novo
-  const UNDO_COLOR = '#e56a6a';
-  const POPUP_UNDO = {
-    'CHAMADO>':          { title: '↺ CHAMADA CANCELADA',  color: UNDO_COLOR, okText: '#ffffff' },
-    'CHEGOU>':           { title: '↺ CHEGADA DESFEITA',   color: UNDO_COLOR, okText: '#ffffff' },
-    'INICIADO>':         { title: '↺ INÍCIO CANCELADO',   color: UNDO_COLOR, okText: '#ffffff' },
-    'CARREGADO>INICIADO':{ title: '↺ CONCLUSÃO DESFEITA', color: UNDO_COLOR, okText: '#ffffff' },
-    'CARREGADO>':        { title: '↺ CONCLUSÃO DESFEITA', color: UNDO_COLOR, okText: '#ffffff' }
+  const NOTIF_UNDO = {
+    'CHAMADO>':           '↺ Chamada cancelada',
+    'CHEGOU>':            '↺ Chegada desfeita',
+    'INICIADO>':          '↺ Início cancelado',
+    'CARREGADO>INICIADO': '↺ Conclusão desfeita',
+    'CARREGADO>':         '↺ Conclusão desfeita'
   };
-  function popupConfig(prev, next) {
-    return POPUP_UNDO[prev + '>' + next] || POPUP_STATUS[next] || null;
-  }
-  const ARRIVAL_POPUP_MS = 20000;
-  let knownStatus = null;   // { id: status } da última leitura; null = ainda sem referência
-  let knownSheet = null;    // aba atual; ao trocar de dia a referência é refeita sem pop-up
-  let arrivalQueue = [];
-  let arrivalTimer = null;
+  const LOCAL_IGNORE_MS = 60000;  // mudanças feitas neste computador não geram aviso aqui
+  let knownStatus = null;         // { id: status } da última leitura; null = ainda sem referência
+  let knownSheet = null;          // aba atual; ao trocar de dia a referência é refeita sem aviso
+  const localChanges = {};        // { id: {from, to, t} } das ações feitas neste computador
 
-  function checkArrivals(sheetName) {
+  function notifSupported() { return 'Notification' in window; }
+
+  function markLocalChange(id, to) {
+    const it = items.find(i => i.id === id);
+    localChanges[id] = { from: it ? (it.status || '') : '', to: to || '', t: Date.now() };
+  }
+  // A mudança veio deste próprio computador (confirmação dela, ou leitura antiga chegando atrasada)?
+  function isOwnChange(id, st) {
+    const lc = localChanges[id];
+    if (!lc || Date.now() - lc.t > LOCAL_IGNORE_MS) return false;
+    return st === lc.to || st === lc.from;
+  }
+
+  function notifTitle(prev, next) {
+    return NOTIF_UNDO[prev + '>' + next] || NOTIF_STATUS[next] || null;
+  }
+
+  function sendNotification(item, title) {
+    if (!notifSupported() || Notification.permission !== 'granted') return;
+    const sec = SECTIONS.find(s => s.key === item.secao);
+    const parts = [];
+    if (item.carga) parts.push('Carga ' + item.carga);
+    if (item.descricao) parts.push(item.descricao);
+    if (viewMode === 'completo') parts.push(formatPeso(item.peso));
+    try {
+      const n = new Notification(title + (sec ? ' — ' + sec.label : ''), {
+        body: parts.join(' · '),
+        tag: 'carga-' + item.id + '-' + (item.status || 'pendente') + '-' + Date.now()
+      });
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch (e) {}
+  }
+
+  function checkStatusChanges(sheetName) {
     const sheet = sheetName != null ? sheetName : knownSheet;
     const snapshot = {};
     items.forEach(i => { snapshot[i.id] = i.status || ''; });
@@ -667,58 +588,47 @@
         const st = i.status || '';
         const prev = knownStatus[i.id];
         if (prev === undefined || prev === st) return;
-        const cfg = popupConfig(prev, st);
-        if (cfg) {
-          arrivalQueue.push({ ...i, _popup: cfg });
-        }
+        if (isOwnChange(i.id, st)) return;
+        const title = notifTitle(prev, st);
+        if (title) sendNotification(i, title);
       });
     }
     knownStatus = snapshot;
     knownSheet = sheet;
-    if (arrivalQueue.length && document.getElementById('arrivalOverlay').style.display === 'none') {
-      showNextArrival();
+  }
+
+  function updateNotifBtn() {
+    const btn = document.getElementById('notifBtn');
+    if (!notifSupported()) { btn.style.display = 'none'; return; }
+    btn.style.display = '';
+    const perm = Notification.permission;
+    if (perm === 'granted') {
+      btn.className = 'notif-btn on';
+      btn.textContent = '🔔 Avisos ativos';
+      btn.title = 'Este computador recebe notificação quando outra tela mudar uma carga. Clique para testar.';
+    } else if (perm === 'denied') {
+      btn.className = 'notif-btn off';
+      btn.textContent = '🔕 Avisos bloqueados';
+      btn.title = 'O navegador bloqueou as notificações deste site. Clique no cadeado ao lado do endereço → Notificações → Permitir, e recarregue a página.';
     } else {
-      updateArrivalQueueLabel();
+      btn.className = 'notif-btn pending';
+      btn.textContent = '🔔 Ativar avisos';
+      btn.title = 'Clique para receber notificações no computador quando outra tela mudar uma carga.';
     }
   }
 
-  function updateArrivalQueueLabel() {
-    const extra = arrivalQueue.length;
-    document.getElementById('arrivalQueue').textContent =
-      extra > 0 ? '+' + extra + ' outro(s) aviso(s)' : '';
-  }
-
-  function showNextArrival() {
-    const item = arrivalQueue.shift();
-    const overlay = document.getElementById('arrivalOverlay');
-    if (!item) { overlay.style.display = 'none'; return; }
-    const sec = SECTIONS.find(s => s.key === item.secao) || { label: item.secao || '', accent: '#5b8def' };
-    const cfg = item._popup || POPUP_STATUS.CHEGOU;
-    const popup = document.getElementById('arrivalPopup');
-    popup.style.setProperty('--accent', cfg.color);
-    popup.style.setProperty('--ok-text', cfg.okText);
-    popup.style.setProperty('--sec', sec.accent);
-    document.getElementById('arrivalTitle').textContent = cfg.title;
-    document.getElementById('arrivalSec').textContent = sec.label;
-    document.getElementById('arrivalCarga').textContent = item.carga ? 'Carga ' + item.carga : '';
-    document.getElementById('arrivalDesc').textContent = item.descricao || '—';
-    document.getElementById('arrivalPeso').textContent = viewMode === 'completo' ? formatPeso(item.peso) : '';
-    const bar = document.getElementById('arrivalTimer');
-    bar.style.animation = 'none';
-    void bar.offsetWidth; // reinicia a barra de tempo
-    bar.style.animation = 'drain ' + (ARRIVAL_POPUP_MS / 1000) + 's linear forwards';
-    updateArrivalQueueLabel();
-    overlay.style.display = 'flex';
-    if (arrivalTimer) clearTimeout(arrivalTimer);
-    arrivalTimer = setTimeout(showNextArrival, ARRIVAL_POPUP_MS);
-  }
-
-  document.getElementById('arrivalOk').addEventListener('click', showNextArrival);
-  document.getElementById('arrivalOverlay').addEventListener('click', e => {
-    if (e.target.id === 'arrivalOverlay') showNextArrival();
-  });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && document.getElementById('arrivalOverlay').style.display !== 'none') showNextArrival();
+  document.getElementById('notifBtn').addEventListener('click', async () => {
+    if (!notifSupported()) return;
+    if (Notification.permission === 'granted') {
+      sendNotification({ id: 'teste', secao: '', carga: '', descricao: 'As notificações estão funcionando neste computador.', peso: 0, status: '' }, '✅ Teste de aviso');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      alert('As notificações estão bloqueadas para este site.\n\nClique no cadeado ao lado do endereço do site → Notificações → Permitir, e recarregue a página.');
+      return;
+    }
+    try { await Notification.requestPermission(); } catch (e) {}
+    updateNotifBtn();
   });
   try { viewMode = localStorage.getItem('quadroCargasViewMode') || 'completo'; } catch (e) {}
 
@@ -842,8 +752,8 @@
       }
       hideError();
       items = data.items || [];
+      checkStatusChanges(data.sheetName || '');
       document.getElementById('dayLabel').textContent = data.sheetName || '';
-      checkArrivals(data.sheetName || '');
       document.getElementById('syncedLabel').textContent =
         'Atualizado ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       setStatusDot('ok');
@@ -864,6 +774,7 @@
   }
 
   async function setItemStatus(id, status) {
+    markLocalChange(id, status);
     const it = items.find(i => i.id === id);
     if (it) it.status = status;
     render(id);
@@ -874,6 +785,7 @@
   }
 
   async function setStatusAndPromote(item, newStatus) {
+    markLocalChange(item.id, newStatus);
     const secActive = items
       .filter(i => i.secao === item.secao && i.status !== 'CARREGADO')
       .sort((a, b) => a.ordem - b.ordem);
@@ -1008,7 +920,7 @@
   }
 
   function render(highlightId) {
-    if (knownStatus) checkArrivals();
+    if (knownStatus) checkStatusChanges();
     renderGlobalStats();
     const board = document.getElementById('board');
     board.innerHTML = '';
@@ -1086,6 +998,7 @@
 
   function init() {
     applyViewToggleUI();
+    updateNotifBtn();
     config = loadConfig();
     if (!config && DEFAULT_APPS_SCRIPT_URL) {
       config = { url: DEFAULT_APPS_SCRIPT_URL, dia: '' };
@@ -1106,6 +1019,10 @@
 </script>
 </body>
 </html>
+
+
+
+
 
 
 
