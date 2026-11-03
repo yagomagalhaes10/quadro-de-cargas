@@ -573,7 +573,7 @@
   .tempo-head .sub { font-size: 0.78rem; color: var(--text-secondary); }
   .tempo-kpis {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 10px;
     margin-bottom: 16px;
   }
@@ -1169,6 +1169,12 @@
     return null;
   }
 
+  // Minutos por tonelada: tempo total ÷ toneladas das cargas que têm tempo registrado.
+  function porTonelada(ms, kg) {
+    if (!ms || !(kg > 0)) return '—';
+    return fmtDur(ms / (kg / 1000)) + '/t';
+  }
+
   function tempoStats(lista) {
     const done = lista.map(i => ({ item: i, ms: duracaoCarga(i) })).filter(x => x.ms != null)
       .sort((a, b) => b.ms - a.ms);
@@ -1245,6 +1251,7 @@
       '<div class="kpi"><div class="kpi-label">Peso carregado</div><div class="kpi-value" style="font-size:0.95rem">' + formatPeso(pesoTotal) + '</div></div>' +
       '<div class="kpi"><div class="kpi-label">Tempo total gasto</div><div class="kpi-value green">' + (comTempo.length ? fmtDur(minTotal * 60000) : '—') + '</div></div>' +
       '<div class="kpi"><div class="kpi-label">Média por carga</div><div class="kpi-value">' + (comTempo.length ? fmtDur(media * 60000) : '—') + '</div></div>' +
+      '<div class="kpi" title="Tempo total ÷ toneladas das cargas com tempo registrado"><div class="kpi-label">Tempo por tonelada</div><div class="kpi-value">' + porTonelada(minTotal * 60000, comTempo.reduce((s, i) => s + i.peso, 0)) + '</div></div>' +
       '</div>';
 
     html += '<div class="tempo-sec-title">Cargas do mês — do maior para o menor tempo</div>';
@@ -1308,6 +1315,7 @@
       '<div class="kpi"><div class="kpi-label">Cargas concluídas</div><div class="kpi-value">' + st.done.length + '</div></div>' +
       '<div class="kpi"><div class="kpi-label">Tempo total</div><div class="kpi-value green">' + (st.done.length ? fmtDur(st.total) : '—') + '</div></div>' +
       '<div class="kpi"><div class="kpi-label">Média por carga</div><div class="kpi-value">' + (st.done.length ? fmtDur(st.media) : '—') + '</div></div>' +
+      '<div class="kpi" title="Tempo total ÷ toneladas das cargas com tempo registrado"><div class="kpi-label">Tempo por tonelada</div><div class="kpi-value">' + porTonelada(st.total, st.done.reduce((s, x) => s + (Number(x.item.peso) || 0), 0)) + '</div></div>' +
       '<div class="kpi"><div class="kpi-label">Maior / menor</div><div class="kpi-value amber" style="font-size:0.85rem;white-space:nowrap">' + maior + ' / ' + menor + '</div></div>' +
       '</div>';
 
@@ -1654,7 +1662,6 @@
 </script>
 </body>
 </html>
-
 
 
 
