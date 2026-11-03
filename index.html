@@ -217,7 +217,7 @@
   /* ---------- Board ---------- */
   .board {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 18px;
     padding: 20px 24px 32px;
   }
@@ -277,6 +277,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
   }
   .card.loaded { opacity: 0.5; }
   .card.loaded .descricao { text-decoration: line-through; }
@@ -507,14 +508,17 @@
   /* ---------- Tempo de carregamento ---------- */
   .timer-live {
     font-family: var(--mono);
-    font-size: 0.72rem;
+    font-size: 0.85rem;
     font-weight: 800;
     color: #1a1300;
     background: var(--amber);
-    padding: 2px 7px;
-    border-radius: 4px;
+    padding: 3px 8px;
+    border-radius: 5px;
     white-space: nowrap;
   }
+  .timer-live .timer-ini { font-weight: 600; font-size: 0.7rem; opacity: 0.8; margin-left: 4px; }
+  .timer-live.t-30 { background: #ff8c1a; }           /* passou de 30 min */
+  .timer-live.t-60 { background: var(--red); color: #fff; } /* passou de 1 h */
   .timer-done {
     font-family: var(--mono);
     font-size: 0.72rem;
@@ -1092,6 +1096,73 @@
       it.fim = '';
     }
   }
+  // ---------- Cronômetro local (quando o Apps Script não envia início/fim) ----------
+  // O quadro anota no navegador a hora em que viu a carga entrar em "Em andamento" (ou em que
+  // alguém clicou ▶ neste computador) e a hora do ✓. Se o script mandar inicio/fim, vale o do script.
+  // Carga que já estava em andamento quando o quadro abriu conta "a partir de agora" (marcada com ~).
+  const LOCAL_TEMPO_KEY = 'quadroCargasTempoLocal';
+  let tempoLocal = {};
+  try { tempoLocal = JSON.parse(localStorage.getItem(LOCAL_TEMPO_KEY)) || {}; } catch (e) { tempoLocal = {}; }
+  const statusVisto = {};  // último status visto por carga nesta tela
+  function salvarTempoLocal() {
+    const limite = Date.now() - 3 * 86400000; // guarda só 3 dias
+    Object.keys(tempoLocal).forEach(k => { if ((tempoLocal[k].t || 0) < limite) delete tempoLocal[k]; });
+    try { localStorage.setItem(LOCAL_TEMPO_KEY, JSON.stringify(tempoLocal)); } catch (e) {}
+  }
+  function chaveLocal(id) { return (document.getElementById('dayLabel').textContent || '') + '|' + id; }
+  // Chamado quando ESTE computador muda o status.
+  function marcarTempoLocal(id, to) {
+    const k = chaveLocal(id), agora = Date.now();
+    if (to === 'INICIADO') {
+      if (!tempoLocal[k]) tempoLocal[k] = { t: agora, aprox: false };
+      delete tempoLocal[k].f;
+    } else if (to === 'CARREGADO') {
+      tempoLocal[k] = tempoLocal[k] || { t: agora, aprox: false };
+      tempoLocal[k].f = agora;
+    } else {
+      delete tempoLocal[k];
+    }
+    salvarTempoLocal();
+  }
+  // Completa inicio/fim das cargas com o que o quadro anotou.
+  function completarTempos() {
+    const agora = Date.now();
+    let mudou = false;
+    items.forEach(it => {
+      const st = it.status || '';
+      const k = chaveLocal(it.id);
+      const antes = statusVisto[k];
+      statusVisto[k] = st;
+      if (tsOf(it.inicio)) return; // o script já mandou: usa o dele
+      let reg = tempoLocal[k];
+      if (st === 'INICIADO') {
+        if (!reg) { reg = tempoLocal[k] = { t: agora, aprox: antes === undefined }; mudou = true; }
+        if (reg.f) { delete reg.f; mudou = true; }
+      } else if (st === 'CARREGADO') {
+        if (reg && !reg.f) { reg.f = antes === 'INICIADO' || antes === undefined ? agora : agora; mudou = true; }
+      } else if (reg) {
+        delete tempoLocal[k]; reg = null; mudou = true;
+      }
+      if (reg && (st === 'INICIADO' || st === 'CARREGADO')) {
+        it.inicio = new Date(reg.t).toISOString();
+        it.inicioAprox = !!reg.aprox;
+        if (st === 'CARREGADO' && reg.f && !tsOf(it.fim)) it.fim = new Date(reg.f).toISOString();
+      }
+    });
+    if (mudou) salvarTempoLocal();
+  }
+
+  // Cronômetro do card em andamento: "⏱ 00:12:34 desde 08:02" (laranja após 30 min, vermelho após 1 h)
+  function timerLiveHtml(ini, aprox) {
+    const min = (Date.now() - ini) / 60000;
+    const cls = min >= 60 ? ' t-60' : (min >= 30 ? ' t-30' : '');
+    const titulo = aprox
+      ? 'Já estava em andamento quando o quadro abriu: contando a partir de ' + fmtHora(ini) + ' (o início real pode ter sido antes)'
+      : 'Carregando há este tempo (início às ' + fmtHora(ini) + ')';
+    return '<span class="timer-live' + cls + '" title="' + titulo + '" data-inicio="' + ini + '">' +
+      '⏱ <span class="timer-clk">' + fmtClock(Date.now() - ini) + '</span><span class="timer-ini">desde ' + (aprox ? '~' : '') + fmtHora(ini) + '</span></span>';
+  }
+
   function duracaoCarga(it) {
     const ini = tsOf(it.inicio), fim = tsOf(it.fim);
     if (it.status === 'CARREGADO' && ini && fim && fim >= ini) return fim - ini;
@@ -1110,7 +1181,13 @@
     const now = Date.now();
     document.querySelectorAll('[data-inicio]').forEach(el => {
       const ini = Number(el.dataset.inicio);
-      el.textContent = (el.dataset.prefix || '') + fmtClock(now - ini);
+      const clk = el.querySelector('.timer-clk');
+      if (clk) clk.textContent = fmtClock(now - ini); else el.textContent = (el.dataset.prefix || '') + fmtClock(now - ini);
+      if (el.classList.contains('timer-live')) {
+        const min = (now - ini) / 60000;
+        el.classList.toggle('t-30', min >= 30 && min < 60);
+        el.classList.toggle('t-60', min >= 60);
+      }
     });
   }, 1000);
 
@@ -1315,6 +1392,7 @@
   async function setItemStatus(id, status) {
     markLocalChange(id, status);
     const it = items.find(i => i.id === id);
+    marcarTempoLocal(id, status);
     if (it) { applyLocalTempo(it, it.status || '', status); it.status = status; }
     render(id);
     try {
@@ -1336,6 +1414,7 @@
       if (it) it.ordem = idx + 1;
     });
     const target = items.find(i => i.id === item.id);
+    marcarTempoLocal(item.id, newStatus);
     if (target) { applyLocalTempo(target, target.status || '', newStatus); target.status = newStatus; }
     render(item.id);
     try {
@@ -1408,7 +1487,7 @@
       '<span class="descricao">' + escapeHtml(item.descricao) + '</span>' +
       (status === 'INICIADO' ? '<span class="badge-progress">EM ANDAMENTO</span>' : '') +
       (status === 'INICIADO' && tsOf(item.inicio)
-        ? '<span class="timer-live" title="Tempo desde o início do carregamento" data-inicio="' + tsOf(item.inicio) + '">' + fmtClock(Date.now() - tsOf(item.inicio)) + '</span>' : '') +
+        ? timerLiveHtml(tsOf(item.inicio), item.inicioAprox) : '') +
       (duracaoCarga(item) != null
         ? '<span class="timer-done" title="Tempo de carregamento (' + fmtHora(tsOf(item.inicio)) + ' → ' + fmtHora(tsOf(item.fim)) + ')">⏱ ' + fmtDur(duracaoCarga(item)) + '</span>' : '') +
       (status === 'CHAMADO' ? '<span class="badge-called">🔔 IR PARA DOCA</span>' : '') +
@@ -1471,6 +1550,7 @@
   }
 
   function render(highlightId) {
+    completarTempos();
     if (knownStatus) checkStatusChanges();
     renderGlobalStats();
     const board = document.getElementById('board');
@@ -1576,6 +1656,9 @@
 </script>
 </body>
 </html>
+
+
+
 
 
 
