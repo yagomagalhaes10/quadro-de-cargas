@@ -1486,8 +1486,6 @@
       '<span class="carga-chip">' + escapeHtml(item.carga || '—') + '</span>' +
       '<span class="descricao">' + escapeHtml(item.descricao) + '</span>' +
       (status === 'INICIADO' ? '<span class="badge-progress">EM ANDAMENTO</span>' : '') +
-      (status === 'INICIADO' && tsOf(item.inicio)
-        ? timerLiveHtml(tsOf(item.inicio), item.inicioAprox) : '') +
       (duracaoCarga(item) != null
         ? '<span class="timer-done" title="Tempo de carregamento (' + fmtHora(tsOf(item.inicio)) + ' → ' + fmtHora(tsOf(item.fim)) + ')">⏱ ' + fmtDur(duracaoCarga(item)) + '</span>' : '') +
       (status === 'CHAMADO' ? '<span class="badge-called">🔔 IR PARA DOCA</span>' : '') +
