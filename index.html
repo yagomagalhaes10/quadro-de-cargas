@@ -503,6 +503,125 @@
   .notif-panel input { accent-color: var(--sec-color, var(--amber)); width: 16px; height: 16px; cursor: pointer; }
   .notif-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
   .notif-panel-hint { font-size: 0.72rem; color: var(--text-secondary); line-height: 1.4; }
+
+  /* ---------- Tempo de carregamento ---------- */
+  .timer-live {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #1a1300;
+    background: var(--amber);
+    padding: 2px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .timer-done {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--green);
+    white-space: nowrap;
+  }
+  .stat-line.tempo { color: var(--green); }
+
+  .tempo-btn {
+    background: none;
+    border: 1px solid var(--divider);
+    color: var(--text-primary);
+    border-radius: 6px;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tempo-btn:hover { background: var(--panel-bg-alt); }
+
+  .tempo-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 6vh 16px 16px;
+    overflow-y: auto;
+  }
+  .tempo-modal {
+    background: var(--panel-bg);
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 760px;
+    padding: 20px 22px 22px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  }
+  .tempo-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .tempo-head h2 { margin: 0; font-size: 1.05rem; letter-spacing: 0.04em; }
+  .tempo-head .sub { font-size: 0.78rem; color: var(--text-secondary); }
+  .tempo-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 600px) { .tempo-kpis { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: var(--panel-bg-alt);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .kpi-label { font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi-value { font-family: var(--mono); font-weight: 800; font-size: 1.15rem; margin-top: 4px; }
+  .kpi-value.amber { color: var(--amber); }
+  .kpi-value.green { color: var(--green); }
+  .tempo-sec-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 14px 0 8px;
+  }
+  .rank-row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--panel-bg-alt);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    border-left: 3px solid var(--accent, var(--divider));
+  }
+  .rank-pos { font-family: var(--mono); font-weight: 800; color: var(--text-secondary); text-align: center; }
+  .rank-main { min-width: 0; }
+  .rank-desc { font-weight: 700; font-size: 0.86rem; overflow-wrap: break-word; }
+  .rank-meta { font-family: var(--mono); font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px; }
+  .rank-bar { height: 4px; background: var(--panel-bg-hover); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .rank-bar > span { display: block; height: 100%; background: var(--accent, var(--amber)); }
+  .rank-dur { font-family: var(--mono); font-weight: 800; font-size: 1rem; white-space: nowrap; }
+  .rank-dur.live { color: var(--amber); }
+  .tempo-empty { color: var(--text-secondary); font-size: 0.85rem; padding: 14px 4px; text-align: center; }
+  .tempo-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tempo-chip {
+    background: none;
+    border: 1px solid var(--divider);
+    color: var(--text-secondary);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .tempo-chip.active { color: var(--text-primary); border-color: var(--chip, var(--text-primary)); background: var(--panel-bg-hover); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -533,6 +652,7 @@
         <button class="notif-filter-btn" id="notifFilterBtn" title="Escolher de quais seções este computador recebe aviso">▾</button>
         <div class="notif-panel" id="notifPanel" style="display:none;"></div>
       </span>
+      <button class="tempo-btn" id="tempoBtn" title="Tempo de carregamento das cargas do dia (do maior para o menor)">⏱ Tempos</button>
       <button class="icon-btn-top" id="refreshBtn" title="Atualizar agora">⟳</button>
       <button class="icon-btn-top" id="settingsBtn" title="Configurar link do Apps Script">⚙</button>
     </div>
@@ -548,6 +668,10 @@
   </div>
 
   <div id="board" class="board" style="display:none;"></div>
+
+  <div id="tempoOverlay" class="tempo-overlay" style="display:none;">
+    <div class="tempo-modal" id="tempoModal"></div>
+  </div>
 
 <script>
   const SECTIONS = [
@@ -566,7 +690,15 @@
   // Cole aqui o link .../exec do Apps Script para todo mundo que abrir o site
   // já ver o quadro direto, sem precisar colar o link manualmente.
   // Exemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
+  // Link FIXO do Apps Script. Na virada do mês NÃO mexa aqui: só troque o NOVO_ID em
+  // configurarPlanilha() no Apps Script e execute. Para publicar mudanças no script, use
+  // Implantar → Gerenciar implantações → lápis → "Nova versão" (o link continua o mesmo).
   const DEFAULT_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytY_8jPnbgB1FUh9GW49ItqcMb9_MponpSXQ64dlNVaE55sOtFPssUzhat2Z5TMu1q/exec';
+  // Links antigos/de teste: quem tiver um destes salvo no navegador volta para o link fixo acima.
+  const URLS_ANTIGAS = [
+    'https://script.google.com/macros/s/AKfycbwZNR25R5tbRWoQrQ_jxEXBjzqv_dnE8vMY0DPAwAlirzgOJ4MSaEdsnN66CbKa11z89Q/exec',
+    'https://script.google.com/macros/s/AKfycbxOvBvihRIsT6sFUqIjONU4NhZxW28NkcJqf358iTI996kOhNYYis5evogqht1mi3cw/exec'
+  ];
 
   let config = null;
   let items = [];
@@ -921,10 +1053,269 @@
     return res.json();
   }
 
+  // ---------- Tempo de carregamento ----------
+  // O Apps Script grava na planilha a hora do "▶ Iniciar" (coluna M) e do "✓ Concluído" (coluna N)
+  // e devolve em cada item como `inicio` e `fim`. Assim todos os computadores veem o mesmo tempo.
+  let tempoFiltro = '';  // '' = todas as seções
+
+  function tsOf(v) {
+    if (v == null || v === '') return null;
+    const t = typeof v === 'number' ? v : Date.parse(v);
+    return isNaN(t) ? null : t;
+  }
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  // Duração "redonda" para o ranking: 38 min · 1h 05min
+  function fmtDur(ms) {
+    const min = Math.max(0, Math.round(ms / 60000));
+    if (min < 60) return min + ' min';
+    return Math.floor(min / 60) + 'h ' + pad2(min % 60) + 'min';
+  }
+  // Cronômetro ao vivo: 00:12:34
+  function fmtClock(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    return pad2(Math.floor(s / 3600)) + ':' + pad2(Math.floor(s / 60) % 60) + ':' + pad2(s % 60);
+  }
+  function fmtHora(t) {
+    return new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+  // Mesma regra do Apps Script, aplicada na hora para o cronômetro aparecer sem esperar a planilha.
+  function applyLocalTempo(it, from, to) {
+    const agora = new Date().toISOString();
+    if (to === 'INICIADO') {
+      if (!(from === 'CARREGADO' && tsOf(it.inicio))) it.inicio = agora;  // desfazer conclusão mantém o início
+      it.fim = '';
+    } else if (to === 'CARREGADO') {
+      if (!tsOf(it.inicio)) it.inicio = agora;
+      it.fim = agora;
+    } else {
+      it.inicio = '';
+      it.fim = '';
+    }
+  }
+  function duracaoCarga(it) {
+    const ini = tsOf(it.inicio), fim = tsOf(it.fim);
+    if (it.status === 'CARREGADO' && ini && fim && fim >= ini) return fim - ini;
+    return null;
+  }
+
+  function tempoStats(lista) {
+    const done = lista.map(i => ({ item: i, ms: duracaoCarga(i) })).filter(x => x.ms != null)
+      .sort((a, b) => b.ms - a.ms);
+    const total = done.reduce((s, x) => s + x.ms, 0);
+    return { done, total, media: done.length ? total / done.length : 0 };
+  }
+
+  // Atualiza todos os cronômetros na tela a cada segundo.
+  setInterval(() => {
+    const now = Date.now();
+    document.querySelectorAll('[data-inicio]').forEach(el => {
+      const ini = Number(el.dataset.inicio);
+      el.textContent = (el.dataset.prefix || '') + fmtClock(now - ini);
+    });
+  }, 1000);
+
+  // ---------- Indicador mensal (lê a planilha de Histórico pelo Apps Script) ----------
+  let tempoModo = 'dia';  // 'dia' | 'mes'
+  let tempoMes = new Date().getFullYear() + '-' + pad2(new Date().getMonth() + 1);
+  let mesDados = null;    // { mes, itens }
+  let mesCarregando = false, mesErro = '';
+
+  async function carregarMes(force) {
+    if (!config || !config.url) return;
+    if (!force && mesDados && mesDados.mes === tempoMes) return;
+    mesCarregando = true; mesErro = '';
+    renderTempoModal();
+    try {
+      const sep = config.url.indexOf('?') === -1 ? '?' : '&';
+      const res = await fetch(config.url + sep + 'historico=' + encodeURIComponent(tempoMes));
+      const data = await res.json();
+      if (data.error) mesErro = data.error;
+      else if (!Array.isArray(data.itens)) {
+        // O link respondeu as cargas do dia: a implantação no ar ainda é a versão antiga do script.
+        mesErro = 'O Apps Script no ar ainda é a versão antiga e não lê o histórico. ' +
+          'No Apps Script: Implantar → Gerenciar implantações → lápis → Versão: "Nova versão" → Implantar.';
+      }
+      else mesDados = { mes: tempoMes, itens: data.itens };
+    } catch (e) {
+      mesErro = 'Não foi possível ler o histórico.';
+    }
+    mesCarregando = false;
+    renderTempoModal();
+  }
+
+  function fmtData(iso) {
+    const p = String(iso || '').split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] : '';
+  }
+
+  function htmlMes() {
+    let html = '<div class="tempo-filter" style="align-items:center">' +
+      '<input type="month" id="tempoMesInput" class="dia-input" style="width:150px" value="' + tempoMes + '" />' +
+      '<button class="tempo-chip" id="tempoMesRefresh" title="Atualizar">⟳</button></div>';
+    if (mesCarregando) return html + '<div class="tempo-empty">Carregando histórico…</div>';
+    if (mesErro) return html + '<div class="tempo-empty">' + escapeHtml(mesErro) + '</div>';
+    if (!mesDados) return html;
+
+    const todos = mesDados.itens.filter(i => !tempoFiltro || i.secao === tempoFiltro);
+    const comTempo = todos.filter(i => i.minutos != null).sort((a, b) => b.minutos - a.minutos);
+    const pesoTotal = todos.reduce((s, i) => s + i.peso, 0);
+    const minTotal = comTempo.reduce((s, i) => s + i.minutos, 0);
+    const media = comTempo.length ? minTotal / comTempo.length : 0;
+    const maxMin = comTempo.length ? comTempo[0].minutos || 1 : 1;
+
+    html += '<div class="tempo-kpis">' +
+      '<div class="kpi"><div class="kpi-label">Cargas concluídas</div><div class="kpi-value">' + todos.length + '</div></div>' +
+      '<div class="kpi"><div class="kpi-label">Peso carregado</div><div class="kpi-value" style="font-size:0.95rem">' + formatPeso(pesoTotal) + '</div></div>' +
+      '<div class="kpi"><div class="kpi-label">Tempo total gasto</div><div class="kpi-value green">' + (comTempo.length ? fmtDur(minTotal * 60000) : '—') + '</div></div>' +
+      '<div class="kpi"><div class="kpi-label">Média por carga</div><div class="kpi-value">' + (comTempo.length ? fmtDur(media * 60000) : '—') + '</div></div>' +
+      '</div>';
+
+    html += '<div class="tempo-sec-title">Cargas do mês — do maior para o menor tempo</div>';
+    if (!comTempo.length) {
+      html += '<div class="tempo-empty">Nenhuma carga com tempo registrado neste mês.</div>';
+    } else {
+      comTempo.forEach((it, idx) => {
+        const sec = SECTIONS.find(s => s.key === it.secao);
+        const ini = tsOf(it.inicio), fim = tsOf(it.fim);
+        html += '<div class="rank-row" style="--accent:' + (sec ? sec.accent : 'var(--divider)') + '">' +
+          '<span class="rank-pos">' + (idx + 1) + 'º</span>' +
+          '<div class="rank-main"><div class="rank-desc">' + escapeHtml(it.descricao) + '</div>' +
+          '<div class="rank-meta">' + fmtData(it.data) + ' · Carga ' + escapeHtml(it.carga || '—') + ' · ' + (sec ? sec.label : escapeHtml(it.secao)) +
+          (ini && fim ? ' · ' + fmtHora(ini) + ' → ' + fmtHora(fim) : '') + ' · ' + formatPeso(it.peso) + '</div>' +
+          '<div class="rank-bar"><span style="width:' + Math.max(3, Math.round(it.minutos / maxMin * 100)) + '%"></span></div></div>' +
+          '<span class="rank-dur">' + fmtDur(it.minutos * 60000) + '</span></div>';
+      });
+    }
+    const semTempo = todos.length - comTempo.length;
+    if (semTempo) html += '<div class="tempo-empty">' + semTempo + ' carga(s) concluída(s) sem horário de início (entram no peso, não no tempo).</div>';
+    return html;
+  }
+
+  function renderTempoModal() {
+    const overlay = document.getElementById('tempoOverlay');
+    if (overlay.style.display === 'none') return;
+    const modal = document.getElementById('tempoModal');
+    if (tempoModo === 'mes') {
+      // Não redesenha enquanto alguém escolhe o mês (o quadro atualiza a cada 20 s).
+      if (document.activeElement && document.activeElement.id === 'tempoMesInput') return;
+      modal.innerHTML =
+        '<div class="tempo-head"><div><h2>📅 INDICADOR MENSAL</h2>' +
+        '<span class="sub">Histórico de cargas concluídas · maior → menor tempo</span></div>' +
+        '<button class="icon-btn-top" id="tempoClose" title="Fechar">✕</button></div>' +
+        modoToggleHtml() + filtroHtml() + htmlMes();
+      bindTempoModal();
+      const inp = document.getElementById('tempoMesInput');
+      if (inp) inp.addEventListener('change', () => { if (inp.value) { tempoMes = inp.value; carregarMes(true); } });
+      const rf = document.getElementById('tempoMesRefresh');
+      if (rf) rf.addEventListener('click', () => carregarMes(true));
+      return;
+    }
+    const lista = items.filter(i => !tempoFiltro || i.secao === tempoFiltro);
+    const st = tempoStats(lista);
+    const andamento = lista.filter(i => i.status === 'INICIADO' && tsOf(i.inicio))
+      .sort((a, b) => tsOf(a.inicio) - tsOf(b.inicio));
+    const semTempo = lista.filter(i => i.status === 'CARREGADO' && duracaoCarga(i) == null).length;
+    const maxMs = st.done.length ? st.done[0].ms : 1;
+    const dia = document.getElementById('dayLabel').textContent || '';
+
+    let html =
+      '<div class="tempo-head"><div><h2>⏱ TEMPO DE CARREGAMENTO</h2>' +
+      '<span class="sub">' + escapeHtml(dia) + ' · do ▶ Iniciar até o ✓ Concluído · maior → menor</span></div>' +
+      '<button class="icon-btn-top" id="tempoClose" title="Fechar">✕</button></div>';
+
+    html += modoToggleHtml() + filtroHtml();
+
+    const maior = st.done.length ? fmtDur(st.done[0].ms) : '—';
+    const menor = st.done.length ? fmtDur(st.done[st.done.length - 1].ms) : '—';
+    html += '<div class="tempo-kpis">' +
+      '<div class="kpi"><div class="kpi-label">Cargas concluídas</div><div class="kpi-value">' + st.done.length + '</div></div>' +
+      '<div class="kpi"><div class="kpi-label">Tempo total</div><div class="kpi-value green">' + (st.done.length ? fmtDur(st.total) : '—') + '</div></div>' +
+      '<div class="kpi"><div class="kpi-label">Média por carga</div><div class="kpi-value">' + (st.done.length ? fmtDur(st.media) : '—') + '</div></div>' +
+      '<div class="kpi"><div class="kpi-label">Maior / menor</div><div class="kpi-value amber" style="font-size:0.85rem;white-space:nowrap">' + maior + ' / ' + menor + '</div></div>' +
+      '</div>';
+
+    if (andamento.length) {
+      html += '<div class="tempo-sec-title">Em andamento agora</div>';
+      andamento.forEach(it => {
+        const sec = SECTIONS.find(s => s.key === it.secao);
+        const ini = tsOf(it.inicio);
+        html += '<div class="rank-row" style="--accent:' + (sec ? sec.accent : 'var(--amber)') + '">' +
+          '<span class="rank-pos">▶</span>' +
+          '<div class="rank-main"><div class="rank-desc">' + escapeHtml(it.descricao) + '</div>' +
+          '<div class="rank-meta">Carga ' + escapeHtml(it.carga || '—') + ' · ' + (sec ? sec.label : '') +
+          ' · início ' + fmtHora(ini) + '</div></div>' +
+          '<span class="rank-dur live" data-inicio="' + ini + '">' + fmtClock(Date.now() - ini) + '</span></div>';
+      });
+    }
+
+    html += '<div class="tempo-sec-title">Concluídas — do maior para o menor tempo</div>';
+    if (!st.done.length) {
+      html += '<div class="tempo-empty">Nenhuma carga concluída com tempo registrado neste dia.</div>';
+    } else {
+      st.done.forEach((x, idx) => {
+        const it = x.item;
+        const sec = SECTIONS.find(s => s.key === it.secao);
+        html += '<div class="rank-row" style="--accent:' + (sec ? sec.accent : 'var(--divider)') + '">' +
+          '<span class="rank-pos">' + (idx + 1) + 'º</span>' +
+          '<div class="rank-main"><div class="rank-desc">' + escapeHtml(it.descricao) + '</div>' +
+          '<div class="rank-meta">Carga ' + escapeHtml(it.carga || '—') + ' · ' + (sec ? sec.label : '') +
+          ' · ' + fmtHora(tsOf(it.inicio)) + ' → ' + fmtHora(tsOf(it.fim)) +
+          (viewMode === 'completo' ? ' · ' + formatPeso(it.peso) : '') + '</div>' +
+          '<div class="rank-bar"><span style="width:' + Math.max(3, Math.round(x.ms / maxMs * 100)) + '%"></span></div></div>' +
+          '<span class="rank-dur">' + fmtDur(x.ms) + '</span></div>';
+      });
+    }
+    if (semTempo) {
+      html += '<div class="tempo-empty">' + semTempo + ' carga(s) concluída(s) sem horário registrado (concluídas antes desta função ou marcadas direto na planilha).</div>';
+    }
+
+    modal.innerHTML = html;
+    bindTempoModal();
+  }
+
+  function modoToggleHtml() {
+    return '<div class="view-toggle" style="display:inline-flex;margin-bottom:12px">' +
+      '<button class="view-toggle-btn' + (tempoModo === 'dia' ? ' active' : '') + '" data-modo="dia">Dia</button>' +
+      '<button class="view-toggle-btn' + (tempoModo === 'mes' ? ' active' : '') + '" data-modo="mes">Mês</button></div>';
+  }
+  function filtroHtml() {
+    return '<div class="tempo-filter">' +
+      '<button class="tempo-chip' + (tempoFiltro === '' ? ' active' : '') + '" data-sec="">Todas</button>' +
+      SECTIONS.map(s => '<button class="tempo-chip' + (tempoFiltro === s.key ? ' active' : '') +
+        '" data-sec="' + s.key + '" style="--chip:' + s.accent + '">' + s.label + '</button>').join('') +
+      '</div>';
+  }
+  function bindTempoModal() {
+    const modal = document.getElementById('tempoModal');
+    document.getElementById('tempoClose').addEventListener('click', closeTempoModal);
+    modal.querySelectorAll('.tempo-chip[data-sec]').forEach(b => b.addEventListener('click', () => {
+      tempoFiltro = b.dataset.sec;
+      renderTempoModal();
+    }));
+    modal.querySelectorAll('[data-modo]').forEach(b => b.addEventListener('click', () => {
+      tempoModo = b.dataset.modo;
+      renderTempoModal();
+      if (tempoModo === 'mes') carregarMes(false);
+    }));
+  }
+  function openTempoModal() {
+    document.getElementById('tempoOverlay').style.display = 'flex';
+    renderTempoModal();
+    if (tempoModo === 'mes') carregarMes(true);
+  }
+  function closeTempoModal() {
+    document.getElementById('tempoOverlay').style.display = 'none';
+  }
+  document.getElementById('tempoBtn').addEventListener('click', openTempoModal);
+  document.getElementById('tempoOverlay').addEventListener('click', e => {
+    if (e.target.id === 'tempoOverlay') closeTempoModal();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTempoModal(); });
+
   async function setItemStatus(id, status) {
     markLocalChange(id, status);
     const it = items.find(i => i.id === id);
-    if (it) it.status = status;
+    if (it) { applyLocalTempo(it, it.status || '', status); it.status = status; }
     render(id);
     try {
       const data = await postAction({ action: 'setStatus', id, status });
@@ -945,7 +1336,7 @@
       if (it) it.ordem = idx + 1;
     });
     const target = items.find(i => i.id === item.id);
-    if (target) target.status = newStatus;
+    if (target) { applyLocalTempo(target, target.status || '', newStatus); target.status = newStatus; }
     render(item.id);
     try {
       await postAction({ action: 'reorder', order: newOrderIds });
@@ -1016,6 +1407,10 @@
       '<span class="carga-chip">' + escapeHtml(item.carga || '—') + '</span>' +
       '<span class="descricao">' + escapeHtml(item.descricao) + '</span>' +
       (status === 'INICIADO' ? '<span class="badge-progress">EM ANDAMENTO</span>' : '') +
+      (status === 'INICIADO' && tsOf(item.inicio)
+        ? '<span class="timer-live" title="Tempo desde o início do carregamento" data-inicio="' + tsOf(item.inicio) + '">' + fmtClock(Date.now() - tsOf(item.inicio)) + '</span>' : '') +
+      (duracaoCarga(item) != null
+        ? '<span class="timer-done" title="Tempo de carregamento (' + fmtHora(tsOf(item.inicio)) + ' → ' + fmtHora(tsOf(item.fim)) + ')">⏱ ' + fmtDur(duracaoCarga(item)) + '</span>' : '') +
       (status === 'CHAMADO' ? '<span class="badge-called">🔔 IR PARA DOCA</span>' : '') +
       (status === 'CHEGOU' ? '<span class="badge-arrived">🔵 CHEGOU</span>' : '') +
       '<span class="peso">' + formatPeso(item.peso) + '</span>' +
@@ -1064,7 +1459,15 @@
     const pendingKg = pendingItems.reduce((s, i) => s + i.peso, 0);
     document.getElementById('globalStats').innerHTML =
       '<span class="stat-line">' + statLine('Hoje', totalCount, totalKg) + '</span>' +
-      '<span class="stat-line pending">' + statLine('Pendente', pendingCount, pendingKg) + '</span>';
+      '<span class="stat-line pending">' + statLine('Pendente', pendingCount, pendingKg) + '</span>' +
+      tempoLine(items);
+  }
+
+  // Linha "Tempo" nas estatísticas: total gasto nas concluídas + média por carga.
+  function tempoLine(lista) {
+    const st = tempoStats(lista);
+    if (!st.done.length) return '';
+    return '<span class="stat-line tempo">Tempo: ' + fmtDur(st.total) + ' · média ' + fmtDur(st.media) + '</span>';
   }
 
   function render(highlightId) {
@@ -1097,6 +1500,7 @@
         '<div class="col-stats">' +
           '<span class="stat-line">' + statLine('Hoje', totalCount, totalKg) + '</span>' +
           '<span class="stat-line pending">' + statLine('Pendente', pendingCount, pendingKg) + '</span>' +
+          tempoLine(secItems) +
         '</div>';
       col.appendChild(header);
 
@@ -1142,12 +1546,17 @@
 
       board.appendChild(col);
     });
+    renderTempoModal();
   }
 
   function init() {
     applyViewToggleUI();
     updateNotifBtn();
     config = loadConfig();
+    // Computadores que guardaram um link antigo passam a usar o link atual automaticamente.
+    if (config && URLS_ANTIGAS.indexOf(config.url) !== -1 && config.url !== DEFAULT_APPS_SCRIPT_URL) {
+      saveConfig(DEFAULT_APPS_SCRIPT_URL, config.dia);
+    }
     if (!config && DEFAULT_APPS_SCRIPT_URL) {
       config = { url: DEFAULT_APPS_SCRIPT_URL, dia: '' };
     }
@@ -1167,6 +1576,15 @@
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
 
 
 
