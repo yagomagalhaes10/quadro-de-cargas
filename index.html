@@ -71,6 +71,7 @@
     display: flex;
     align-items: center;
     gap: 14px;
+    flex-wrap: wrap;
     font-size: 0.82rem;
     color: var(--text-secondary);
   }
@@ -387,12 +388,14 @@
   }
 
   .descricao {
-    flex: 1;
+    /* nunca encolhe abaixo de ~150px: quando falta espaço, o peso e os botões descem para a linha de baixo */
+    flex: 1 1 150px;
     font-weight: 700;
     font-size: 0.9rem;
     min-width: 0;
     overflow-wrap: break-word;
   }
+  .actions { margin-left: auto; }
 
   .peso {
     font-family: var(--mono);
@@ -1662,6 +1665,8 @@
 </script>
 </body>
 </html>
+
+
 
 
 
