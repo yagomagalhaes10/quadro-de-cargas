@@ -617,6 +617,8 @@
   .rank-bar > span { display: block; height: 100%; background: var(--accent, var(--amber)); }
   .rank-dur { font-family: var(--mono); font-weight: 800; font-size: 1rem; white-space: nowrap; }
   .rank-dur.live { color: var(--amber); }
+  .rank-tempo { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .rank-ton { font-family: var(--mono); font-size: 0.72rem; color: var(--text-secondary); white-space: nowrap; }
   .tempo-empty { color: var(--text-secondary); font-size: 0.85rem; padding: 14px 4px; text-align: center; }
   .tempo-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
   .tempo-chip {
@@ -1178,6 +1180,12 @@
     return fmtDur(ms / (kg / 1000)) + '/t';
   }
 
+  // Tempo da carga + tempo por tonelada daquela carga, alinhados à direita da linha do ranking.
+  function rankTempoHtml(ms, kg) {
+    return '<span class="rank-tempo"><span class="rank-dur">' + fmtDur(ms) + '</span>' +
+      '<span class="rank-ton" title="Tempo desta carga ÷ toneladas desta carga">' + porTonelada(ms, Number(kg) || 0) + '</span></span>';
+  }
+
   function tempoStats(lista) {
     const done = lista.map(i => ({ item: i, ms: duracaoCarga(i) })).filter(x => x.ms != null)
       .sort((a, b) => b.ms - a.ms);
@@ -1270,7 +1278,7 @@
           '<div class="rank-meta">' + fmtData(it.data) + ' · Carga ' + escapeHtml(it.carga || '—') + ' · ' + (sec ? sec.label : escapeHtml(it.secao)) +
           (ini && fim ? ' · ' + fmtHora(ini) + ' → ' + fmtHora(fim) : '') + ' · ' + formatPeso(it.peso) + '</div>' +
           '<div class="rank-bar"><span style="width:' + Math.max(3, Math.round(it.minutos / maxMin * 100)) + '%"></span></div></div>' +
-          '<span class="rank-dur">' + fmtDur(it.minutos * 60000) + '</span></div>';
+          rankTempoHtml(it.minutos * 60000, it.peso) + '</div>';
       });
     }
     const semTempo = todos.length - comTempo.length;
@@ -1350,7 +1358,7 @@
           ' · ' + fmtHora(tsOf(it.inicio)) + ' → ' + fmtHora(tsOf(it.fim)) +
           (viewMode === 'completo' ? ' · ' + formatPeso(it.peso) : '') + '</div>' +
           '<div class="rank-bar"><span style="width:' + Math.max(3, Math.round(x.ms / maxMs * 100)) + '%"></span></div></div>' +
-          '<span class="rank-dur">' + fmtDur(x.ms) + '</span></div>';
+          rankTempoHtml(x.ms, it.peso) + '</div>';
       });
     }
     if (semTempo) {
